@@ -1125,7 +1125,7 @@
         </div>
       </div>
       <div class="actions">
-        <span id="firebaseStatus" class="firebase-status offline">Google Sheets 연결 대기</span>
+        <span id="firebaseStatus" class="firebase-status offline">Firebase 연결 대기</span>
         <span id="lastSavedStatus" class="last-saved-status">Last Saved: -</span>
         <div class="sound-controls" id="soundControls" title="Voice and alarm volume">
           <button type="button" class="secondary small" id="muteToggleButton" onclick="toggleSoundMute()">🔊 Sound</button>
@@ -2739,26 +2739,43 @@ maybeRunStaffLeaveAlerts();
 document.getElementById('reportDate')?.addEventListener('change', handleManualReportDateChange);
 </script>
 
-<script>
-  const GOOGLE_SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbwloXdKNa0jdXMxOzjN6rOpSYTDcc9t8RIrAYAewFH7vuzxdqq1iXJCePDWVys2wtkISA/exec";
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+  import {
+    getDatabase,
+    ref,
+    set,
+    onValue,
+    serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyC1wA4Thrl_xd9nzu7Q-L3h1zl-nvkOs7A",
+    authDomain: "forena-cs-report-a141b.firebaseapp.com",
+    databaseURL: "https://forena-cs-report-a141b-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "forena-cs-report-a141b",
+    storageBucket: "forena-cs-report-a141b.firebasestorage.app",
+    messagingSenderId: "545882225146",
+    appId: "1:545882225146:web:b1ea8a6fb17f5542f00c43",
+    measurementId: "G-EG2VETT7GX"
+  };
 
   const statusEl = document.getElementById("firebaseStatus");
   const lastSavedEl = document.getElementById("lastSavedStatus");
   let applyingRemoteData = false;
+  let firebaseReady = false;
   let saveTimer = null;
   let activeDateKey = "";
-  let allowSaveBeforeInitialSnapshot = false;
-  let lastAnnouncementId = "";
+  let activeReportRef = null;
+  let stopListening = null;
+  let hasReceivedInitialSnapshot = false;
+let allowSaveBeforeInitialSnapshot = false;
 
-  function setCloudStatus(text, mode) {
+  function setFirebaseStatus(text, mode) {
     if (!statusEl) return;
     statusEl.textContent = text;
     statusEl.classList.remove("online", "offline", "saving");
     if (mode) statusEl.classList.add(mode);
-  }
-
-  function setFirebaseStatus(text, mode) {
-    setCloudStatus(text, mode);
   }
 
   function koreaTimeLabel(date = new Date()) {
@@ -2793,185 +2810,165 @@ document.getElementById('reportDate')?.addEventListener('change', handleManualRe
     return document.getElementById("reportDate")?.value || koreaDateKey();
   }
 
-  function makeJsonpUrl(params) {
-    const url = new URL(GOOGLE_SHEETS_API_URL);
-    Object.entries(params || {}).forEach(([key, value]) => url.searchParams.set(key, value));
-    return url.toString();
-  }
+  if (!firebaseConfig.databaseURL || firebaseConfig.databaseURL.includes("PASTE_YOUR")) {
+    setFirebaseStatus("databaseURL 입력 필요", "offline");
+    console.warn("Firebase Realtime Database URL is missing.");
+  } else {
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
 
-  function jsonpRequest(params, timeoutMs = 12000) {
-    return new Promise((resolve, reject) => {
-      const callbackName = "forenaJsonp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
-      const script = document.createElement("script");
-      let done = false;
-      const cleanup = () => {
-        if (script.parentNode) script.parentNode.removeChild(script);
-        try { delete window[callbackName]; } catch (e) { window[callbackName] = undefined; }
-      };
-      const timer = setTimeout(() => {
-        if (done) return;
-        done = true;
-        cleanup();
-        reject(new Error("Google Sheets API timeout"));
-      }, timeoutMs);
-      window[callbackName] = (data) => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        cleanup();
-        resolve(data);
-      };
-      script.onerror = () => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        cleanup();
-        reject(new Error("Google Sheets API load failed"));
-      };
-      script.src = makeJsonpUrl({...params, callback: callbackName});
-      document.body.appendChild(script);
-    });
-  }
+    function attachRealtimeListener(force = false) {
+      const nextDateKey = currentReportDateKey();
+      if (!force && nextDateKey === activeDateKey && activeReportRef) return;
 
-  function postNoCors(payload) {
-    const body = JSON.stringify(payload || {});
-    try {
-      if (navigator.sendBeacon) {
-        const blob = new Blob([body], {type: "text/plain;charset=utf-8"});
-        if (navigator.sendBeacon(GOOGLE_SHEETS_API_URL, blob)) return Promise.resolve(true);
+      if (typeof stopListening === "function") {
+        stopListening();
       }
-    } catch (e) {}
-    return fetch(GOOGLE_SHEETS_API_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: {"Content-Type": "text/plain;charset=utf-8"},
-      body
-    }).then(() => true);
-  }
 
-  async function loadReportFromSheets(force = false) {
-    const dateKey = currentReportDateKey();
-    if (!force && dateKey === activeDateKey) return;
-    activeDateKey = dateKey;
-    setCloudStatus(`Google Sheets 불러오는 중... (${dateKey})`, "saving");
-    try {
-      const result = await jsonpRequest({action: "loadReport", date: dateKey});
-      if (result && result.ok && result.found && result.data) {
+      activeDateKey = nextDateKey;
+      activeReportRef = ref(db, "reports/" + activeDateKey);
+      hasReceivedInitialSnapshot = false;
+      setFirebaseStatus(`Firebase 연결 중... (${activeDateKey})`, "saving");
+
+      stopListening = onValue(activeReportRef, (snapshot) => {
+        const remote = snapshot.val();
+
+        // When the user manually changes the report date and confirms 초기화,
+        // we intentionally clear that selected date. Do not let an old remote
+        // snapshot refill the form before the confirmed blank reset is saved.
+        if (allowSaveBeforeInitialSnapshot && !hasReceivedInitialSnapshot) {
+          hasReceivedInitialSnapshot = true;
+          setFirebaseStatus(`초기화 저장 준비 중... (${activeDateKey})`, "saving");
+          return;
+        }
+
+        hasReceivedInitialSnapshot = true;
+
+        if (!remote || !remote.formData) {
+          setFirebaseStatus(`Firebase 연결됨 (${activeDateKey})`, "online");
+          return;
+        }
+
         applyingRemoteData = true;
-        window.forenaApplyData({...result.data, reportDate: dateKey});
+        const safeFormData = {...remote.formData, reportDate: activeDateKey};
+        window.forenaApplyData(safeFormData);
         updateTodayDateDisplay();
         applyingRemoteData = false;
-        setCloudStatus(`Google Sheets 동기화됨 (${dateKey})`, "online");
-      } else {
-        setCloudStatus(`Google Sheets 연결됨 (${dateKey})`, "online");
+        setFirebaseStatus(`실시간 동기화됨 (${activeDateKey})`, "online");
+      }, (error) => {
+        console.error(error);
+        setFirebaseStatus("Firebase 오류", "offline");
+      });
+    }
+
+    async function saveReportToFirebase() {
+      if (!firebaseReady || applyingRemoteData) return;
+      attachRealtimeListener();
+      if (!hasReceivedInitialSnapshot && !allowSaveBeforeInitialSnapshot) {
+        setFirebaseStatus(`Firebase 불러오는 중... (${activeDateKey})`, "saving");
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(saveReportToFirebase, 700);
+        return;
       }
-    } catch (error) {
-      applyingRemoteData = false;
-      console.error(error);
-      setCloudStatus("Google Sheets 불러오기 실패", "offline");
-    }
-  }
 
-  async function loadDailySummaryFromSheets() {
-    try {
-      const result = await jsonpRequest({action: "loadDailySummary"});
-      if (result && result.ok && window.forenaRenderHistoryChart) {
-        window.forenaRenderHistoryChart(result.data || {});
+      const reporter = document.getElementById("reporter")?.value || "";
+      const payload = {
+        formData: window.forenaCollectData(),
+        updatedAt: serverTimestamp(),
+        updatedBy: reporter,
+        reportDate: activeDateKey,
+        appName: "FORENA CLINIC ENGLISH TEAM DASHBOARD"
+      };
+
+      setFirebaseStatus(`저장 중... (${activeDateKey})`, "saving");
+      setLastSavedStatus("Saving...", "saving");
+      try {
+        await set(activeReportRef, payload);
+        const currentTotals = totals();
+        await set(ref(db, "dailySummary/" + activeDateKey), {
+          totalReservation: currentTotals.reservations,
+          sameDay: currentTotals.sameDay,
+          cancel: currentTotals.cancels,
+          change: currentTotals.changes,
+          walkin: currentTotals.walkin,
+          updatedAt: serverTimestamp(),
+          updatedBy: reporter
+        });
+        allowSaveBeforeInitialSnapshot = false;
+        setFirebaseStatus(`실시간 저장됨 (${activeDateKey})`, "online");
+        setLastSavedStatus(`Last Saved: ${koreaTimeLabel()} ✓`, "saved");
+      } catch (error) {
+        console.error(error);
+        setFirebaseStatus("저장 실패", "offline");
+        setLastSavedStatus("Save failed", "error");
       }
-    } catch (error) {
-      console.error(error);
     }
-  }
 
-  async function saveReportToSheets() {
-    if (applyingRemoteData) return;
-    const dateKey = currentReportDateKey();
-    activeDateKey = dateKey;
-    const data = window.forenaCollectData ? window.forenaCollectData() : {};
-    data.reportDate = dateKey;
-    setCloudStatus(`Google Sheets 저장 중... (${dateKey})`, "saving");
-    setLastSavedStatus("Saving...", "saving");
-    try {
-      await postNoCors({action: "saveReport", data});
-      allowSaveBeforeInitialSnapshot = false;
-      setCloudStatus(`Google Sheets 저장됨 (${dateKey})`, "online");
-      setLastSavedStatus(`Last Saved: ${koreaTimeLabel()} ✓`, "saved");
-      setTimeout(loadDailySummaryFromSheets, 1200);
-    } catch (error) {
-      console.error(error);
-      setCloudStatus("Google Sheets 저장 실패", "offline");
-      setLastSavedStatus("Save failed", "error");
+    function scheduleFirebaseSave() {
+      if (!firebaseReady || applyingRemoteData) return;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveReportToFirebase, 450);
     }
-  }
 
-  function scheduleSheetsSave() {
-    if (applyingRemoteData) return;
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveReportToSheets, 650);
-  }
+    window.forenaScheduleFirebaseSave = scheduleFirebaseSave;
+    window.forenaSaveNow = saveReportToFirebase;
+    window.forenaAttachRealtimeListener = attachRealtimeListener;
+    window.forenaAllowNextSaveBeforeInitialSnapshot = function(){
+      allowSaveBeforeInitialSnapshot = true;
+    };
 
-  function attachSheetsListener(force = false) {
-    return loadReportFromSheets(force);
-  }
+    const originalSaveData = window.saveData;
+    window.saveData = function(show = true) {
+      originalSaveData(show);
+      scheduleFirebaseSave();
+    };
 
-  window.forenaScheduleFirebaseSave = scheduleSheetsSave;
-  window.forenaSaveNow = saveReportToSheets;
-  window.forenaAttachRealtimeListener = attachSheetsListener;
-  window.forenaAllowNextSaveBeforeInitialSnapshot = function(){
-    allowSaveBeforeInitialSnapshot = true;
-  };
-
-  const originalSaveData = window.saveData;
-  window.saveData = function(show = true) {
-    originalSaveData(show);
-    scheduleSheetsSave();
-  };
-
-  document.addEventListener("input", scheduleSheetsSave);
-  document.addEventListener("change", (event) => {
-    if (event.target && event.target.id === "reportDate") {
-      loadReportFromSheets(true);
-    }
-    scheduleSheetsSave();
-  });
-
-  async function sendAnnouncement(message) {
-    const reporter = document.getElementById("reporter")?.value || "";
-    await postNoCors({
-      action: "saveAnnouncement",
-      message,
-      sender: reporter,
-      reporter
+    document.addEventListener("input", scheduleFirebaseSave);
+    document.addEventListener("change", (event) => {
+      if (event.target && event.target.id === "reportDate") {
+        attachRealtimeListener();
+      }
+      scheduleFirebaseSave();
     });
-    showAnnouncementPopup(message, "📣 FORENA TEAM MESSAGE");
-  }
-  window.forenaSendAnnouncement = sendAnnouncement;
 
-  function handleAnnouncementData(data) {
-    if(!data || !data.id || !data.message) return;
-    if(data.id === lastAnnouncementId) return;
-    lastAnnouncementId = data.id;
-    const seenKey = "forenaSeenAnnouncement_" + data.id;
-    if(localStorage.getItem(seenKey)) return;
-    localStorage.setItem(seenKey, "seen");
-    showAnnouncementPopup(data.message, data.title || '📣 FORENA TEAM MESSAGE');
-  }
 
-  async function pollLatestAnnouncement() {
-    try {
-      const result = await jsonpRequest({action: "latestAnnouncement"}, 8000);
-      if(result && result.ok) handleAnnouncementData(result.data);
-    } catch(error) {
-      console.error(error);
+    async function sendAnnouncement(message) {
+      const id = Date.now() + '_' + Math.random().toString(36).slice(2,8);
+      const reporter = document.getElementById("reporter")?.value || "";
+      await set(ref(db, "teamAnnouncement/current"), {
+        id,
+        type: "teamAnnouncement",
+        title: "📣 FORENA TEAM MESSAGE",
+        message,
+        sender: reporter,
+        createdAt: serverTimestamp()
+      });
     }
+    window.forenaSendAnnouncement = sendAnnouncement;
+
+    onValue(ref(db, "teamAnnouncement/current"), (snapshot) => {
+      const data = snapshot.val();
+      if(!data || !data.id || !data.message) return;
+      const seenKey = "forenaSeenAnnouncement_" + data.id;
+      if(localStorage.getItem(seenKey)) return;
+      localStorage.setItem(seenKey, "seen");
+      showAnnouncementPopup(data.message, data.title || '📣 FORENA TEAM MESSAGE');
+    }, (error) => {
+      console.error(error);
+    });
+
+    firebaseReady = true;
+    attachRealtimeListener();
+    onValue(ref(db, "dailySummary"), (snapshot) => {
+      if(window.forenaRenderHistoryChart){
+        window.forenaRenderHistoryChart(snapshot.val() || {});
+      }
+    }, (error) => {
+      console.error(error);
+    });
+    // Important: do not auto-save on page load. This prevents a second browser
+    // with blank/local data from overwriting the shared Firebase report.
   }
-
-  setCloudStatus("Google Sheets 연결 준비", "saving");
-  loadReportFromSheets(true).then(loadDailySummaryFromSheets);
-  pollLatestAnnouncement();
-  setInterval(pollLatestAnnouncement, 15000);
-  setInterval(loadDailySummaryFromSheets, 60000);
 </script>
-
 </body>
 </html>
