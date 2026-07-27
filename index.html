@@ -1434,8 +1434,11 @@ body::before {
       </div>
     </section>
     <div id="stickyNoticeUfo" class="sticky-notice-ufo" aria-live="polite">
-      <div class="sticky-notice-craft">🛸</div>
-      <div class="sticky-notice-paper"><span class="sticky-notice-title">NOTICE</span><span id="pinnedNoticeDisplay"></span></div>
+      <div class="sticky-notice-craft" aria-hidden="true">👽</div>
+      <div class="sticky-notice-paper">
+        <span class="sticky-notice-title">NOTICE</span><span id="pinnedNoticeDisplay"></span>
+        <button type="button" class="sticky-notice-close" onclick="dismissPinnedNotice()" aria-label="공지 완료 및 닫기" title="완료했어요">×</button>
+      </div>
     </div>
 
     <section class="card full quick-tools-card">
@@ -1907,6 +1910,24 @@ function clearPinnedNotice(){
   if(window.forenaSaveNow) window.forenaSaveNow();
   toast('공지 지웠어요');
 }
+function dismissPinnedNotice(){
+  const banner = document.getElementById('stickyNoticeUfo');
+  if(!banner || !banner.classList.contains('show')) return;
+  banner.classList.add('notice-complete');
+  setTimeout(() => {
+    clearPinnedNotice();
+    banner.classList.remove('notice-complete');
+    const msg = pickRandom([
+      'GOOD JOB! 공지 업무 완료했어요 ✨',
+      '수고했어요! 하나 더 멋지게 완료 👏',
+      '완료! 오늘도 정말 잘하고 있어요 💗',
+      'MISSION COMPLETE! 최고예요 🌟'
+    ]);
+    showSmartPopup('👽 GOOD JOB!', msg, 'alienSupport');
+    showCheer(`👽 ${msg}`);
+    speakCheer(msg);
+  }, 620);
+}
 
 // Milestone voices repeat whenever the total crosses a milestone upward.
 // Example: 9 -> 12 says 대박이네요, and if it goes back to 9 then passes 10 again, it says it again.
@@ -2095,7 +2116,10 @@ function normalizeStaff(){
       end: s.end || legacy.end || '',
       place: s.place || '사무실',
       note: s.note || '',
-      breakState: s.breakState || {}
+      breakState: s.breakState || {},
+      supportNameKey: s.supportNameKey || '',
+      supportDueAt: Number(s.supportDueAt || 0),
+      supportSent: !!s.supportSent
     };
   });
 }
@@ -2116,7 +2140,7 @@ function renderStaff(){
   }
   box.innerHTML = staff.map((s,i)=>`
     <div class="staff-row">
-      <div><label>이름</label><input value="${escapeHtml(s.name)}" oninput="staff[${i}].name=this.value; updateAll()" placeholder="예: 와루"></div>
+      <div><label>이름</label><input value="${escapeHtml(s.name)}" oninput="staff[${i}].name=this.value; updateAll()" onblur="scheduleStaffSupport(${i}, this.value)" placeholder="예: 와루"></div>
       <div><label>출근 시간</label><input type="time" step="300" value="${escapeHtml(s.start)}" oninput="staff[${i}].start=this.value; updateAll()"></div>
       <div><label>퇴근/조퇴 시간</label><input type="time" step="300" value="${escapeHtml(s.end)}" oninput="staff[${i}].end=this.value; updateAll()"></div>
       <div><label>근무 위치</label><select onchange="staff[${i}].place=this.value; updateAll()">${placeOptions(s.place)}</select></div>
@@ -2140,6 +2164,93 @@ function renderStaff(){
 }
 function addStaffRow(){ staff.push({name:'',start:'',end:'',place:'사무실',note:'',breakState:{}}); renderStaff(); updateAll(); }
 function removeStaff(i){ staff.splice(i,1); renderStaff(); updateAll(); }
+
+const STAFF_SUPPORT_DELAY_MS = 20 * 60 * 1000;
+const STAFF_SUPPORT_STAGGER_MS = 60 * 1000;
+const staffSupportTimers = new Map();
+function staffSupportMessage(name){
+  return pickRandom([
+    `오늘도 화이팅, ${name}! 세상에서 제일 멋진 ${name} ✨`,
+    `${name}, 오늘도 빛나고 있어요! 우리 팀 최고예요 💗`,
+    `힘내요 ${name}! 오늘도 분명 멋진 하루가 될 거예요 🌟`,
+    `${name}, 오늘도 잘생김과 예쁨이 열일 중! 화이팅 👽`,
+    `오늘의 주인공 ${name}! 천천히, 하지만 완벽하게 가보자고요 🚀`,
+    `${name}, 이미 너무 잘하고 있어요. 오늘도 같이 화이팅! 💫`
+  ]);
+}
+function supportStorageKey(nameKey){
+  return `forenaStaffSupport_${todayKoreaDateString()}_${nameKey}`;
+}
+function runStaffSupport(index, name, nameKey){
+  normalizeStaff();
+  const member = staff[index];
+  if(!member || String(member.name || '').trim().toLowerCase() !== nameKey || member.supportSent) return;
+  member.supportSent = true;
+  const msg = staffSupportMessage(name);
+  showSmartPopup('👽 응원 메시지', msg, 'alienSupport');
+  showCheer(`👽 ${name}, 화이팅!`);
+  speakCheer(msg);
+  try { localStorage.setItem(supportStorageKey(nameKey), JSON.stringify({sent:true, dueAt:member.supportDueAt})); } catch(e) {}
+  updateAll();
+  if(window.forenaSaveNow) window.forenaSaveNow();
+}
+function armStaffSupportTimer(index){
+  normalizeStaff();
+  const member = staff[index];
+  if(!member || member.supportSent || !member.supportDueAt) return;
+  const name = String(member.name || '').trim();
+  const nameKey = String(member.supportNameKey || name.toLowerCase());
+  if(!name || !nameKey) return;
+  const timerKey = `${index}:${nameKey}`;
+  if(staffSupportTimers.has(timerKey)) clearTimeout(staffSupportTimers.get(timerKey));
+  const wait = Math.max(250, member.supportDueAt - Date.now());
+  const timer = setTimeout(() => {
+    staffSupportTimers.delete(timerKey);
+    runStaffSupport(index, name, nameKey);
+  }, wait);
+  staffSupportTimers.set(timerKey, timer);
+}
+function scheduleStaffSupport(index, rawName){
+  normalizeStaff();
+  const member = staff[index];
+  const name = String(rawName || '').trim();
+  if(!member || !name) return;
+  const nameKey = name.toLowerCase();
+  if(member.supportNameKey === nameKey && member.supportDueAt && !member.supportSent){
+    armStaffSupportTimer(index);
+    return;
+  }
+  if(member.supportNameKey && member.supportNameKey !== nameKey){
+    const oldTimerKey = `${index}:${member.supportNameKey}`;
+    if(staffSupportTimers.has(oldTimerKey)) clearTimeout(staffSupportTimers.get(oldTimerKey));
+  }
+  let dueAt = Date.now() + STAFF_SUPPORT_DELAY_MS;
+  const existingDueTimes = staff.map((s, i) => i === index ? 0 : Number(s.supportDueAt || 0)).filter(t => t > Date.now() && t < Date.now() + 3 * 60 * 60 * 1000);
+  if(existingDueTimes.length) dueAt = Math.max(dueAt, Math.max(...existingDueTimes) + STAFF_SUPPORT_STAGGER_MS);
+  member.supportNameKey = nameKey;
+  member.supportDueAt = dueAt;
+  member.supportSent = false;
+  try { localStorage.setItem(supportStorageKey(nameKey), JSON.stringify({sent:false, dueAt})); } catch(e) {}
+  armStaffSupportTimer(index);
+  updateAll();
+  toast(`${name} 응원 메시지를 20분 후 준비할게요 👽`);
+}
+function restoreStaffSupportTimers(){
+  normalizeStaff();
+  staff.forEach((member, index) => {
+    const name = String(member.name || '').trim();
+    if(!name || member.supportSent) return;
+    const nameKey = String(member.supportNameKey || name.toLowerCase());
+    try {
+      const saved = JSON.parse(localStorage.getItem(supportStorageKey(nameKey)) || 'null');
+      if(saved){
+        member.supportDueAt = Number(saved.dueAt || member.supportDueAt || 0);
+        member.supportSent = !!saved.sent;
+      }
+    } catch(e) {}
+    if(member.supportDueAt && !member.supportSent) armStaffSupportTimer(index);
+  });
+}
 function breakDurationMinutes(type){
   if(currentShiftType === 'weekend') return 40;
   return type === 'rest' ? 20 : 60;
@@ -2345,9 +2456,10 @@ function showSmartPopup(title, message, mode='default'){
   const titleEl = pop?.querySelector('h3');
   const textEl = document.getElementById('announcementPopupText');
   if(!pop || !textEl) { alert(message); return; }
-  pop.classList.remove('reminder-sameday', 'reminder-markvu');
+  pop.classList.remove('reminder-sameday', 'reminder-markvu', 'alien-support');
   if(mode === 'sameDay') pop.classList.add('reminder-sameday');
   if(mode === 'markvu') pop.classList.add('reminder-markvu');
+  if(mode === 'alienSupport') pop.classList.add('alien-support');
   if(titleEl) titleEl.textContent = title;
   textEl.textContent = message;
   pop.classList.remove('show');
@@ -2829,6 +2941,7 @@ function applyData(data){
   updatePreview();
   updateSourceSummary();
   updateGameDashboard();
+  restoreStaffSupportTimers();
 }
 function saveData(show=true){ localStorage.setItem(storageKey(), JSON.stringify(collectData())); if(show) toast('저장 완료'); }
 function loadData(){
@@ -3584,6 +3697,56 @@ let allowSaveBeforeInitialSnapshot = false;
   }
   .sticky-notice-title { margin-right:8px; color:var(--hour-accent-strong,#d85f8a); font-size:11px; letter-spacing:.7px; }
   @keyframes noticeUfoFloat { 50% { transform: translateY(-5px) rotate(3deg); } }
+
+  .sticky-notice-ufo.show { pointer-events: auto; }
+  .sticky-notice-craft {
+    width: 54px;
+    height: 54px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 28%, #ffffff 0 8%, #d7fff2 18%, #9ff5d5 56%, #6ac7b0 100%);
+    border: 2px solid rgba(255,255,255,.82);
+    box-shadow: 0 7px 0 rgba(61,124,116,.18), 0 13px 25px rgba(65,220,183,.28);
+  }
+  .sticky-notice-paper { position: relative; padding-right: 46px; }
+  .sticky-notice-close {
+    position: absolute;
+    right: 7px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 30px;
+    min-height: 30px;
+    padding: 0;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ff9fc9, #9f8cff) !important;
+    color: white;
+    font-size: 20px;
+    line-height: 1;
+    box-shadow: 0 5px 12px rgba(94,66,155,.22);
+  }
+  .sticky-notice-ufo.notice-complete {
+    animation: noticeFlyRight .62s cubic-bezier(.22,.8,.3,1) forwards;
+  }
+  @keyframes noticeFlyRight {
+    0% { transform: translate(-50%,0) rotate(0); opacity:1; }
+    35% { transform: translate(-42%,-8px) rotate(2deg); opacity:1; }
+    100% { transform: translate(105vw,-18px) rotate(8deg); opacity:0; }
+  }
+  .announcement-popup.alien-support {
+    border-color: #9fe8d2;
+    background: radial-gradient(circle at 18% 12%, #eafff8 0 23%, #fff 49%, #f5efff 100%);
+    animation: alienSupportPop .48s cubic-bezier(.2,.85,.25,1.15);
+  }
+  .announcement-popup.alien-support h3 { color:#3f9e88; }
+  .announcement-popup.alien-support::before {
+    content:'👽'; position:absolute; left:18px; top:12px; font-size:30px;
+    animation: alienWiggle 1.3s ease-in-out infinite;
+  }
+  @keyframes alienSupportPop { 0%{transform:translate(-50%,-50%) scale(.82) rotate(-2deg)} 70%{transform:translate(-50%,-50%) scale(1.04) rotate(1deg)} 100%{transform:translate(-50%,-50%) scale(1)} }
+  @keyframes alienWiggle { 50%{transform:translateY(-4px) rotate(6deg) scale(1.08)} }
+
   @media(max-width:700px){
     .mini-notice-row { grid-template-columns: 1fr; }
     .notice-actions { display:grid; grid-template-columns:1fr 1fr; }
