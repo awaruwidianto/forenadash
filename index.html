@@ -1425,7 +1425,7 @@ body::before {
     <section class="card full mini-notice-card">
       <div class="mini-notice-row">
         <div class="mini-notice-label">📌 공지</div>
-        <textarea id="pinnedNoticeDraft" class="mini-notice-input" placeholder="공지 한 개를 입력한 뒤 등록해주세요"></textarea>
+        <textarea id="pinnedNoticeDraft" class="mini-notice-input" placeholder="공지 내용을 입력한 뒤 등록해주세요 (여러 개 가능)"></textarea>
         <div class="notice-actions">
           <button type="button" class="small" onclick="submitPinnedNotice()">공지 등록</button>
           <button type="button" class="secondary small" onclick="clearPinnedNotice()">공지 지우기</button>
@@ -1433,13 +1433,7 @@ body::before {
         <input id="pinnedNotice" type="hidden" value="" />
       </div>
     </section>
-    <div id="stickyNoticeUfo" class="sticky-notice-ufo" aria-live="polite">
-      <div class="sticky-notice-craft" aria-hidden="true">👽</div>
-      <div class="sticky-notice-paper">
-        <span class="sticky-notice-title">NOTICE</span><span id="pinnedNoticeDisplay"></span>
-        <button type="button" class="sticky-notice-close" onclick="dismissPinnedNotice()" aria-label="공지 완료 및 닫기" title="완료했어요">×</button>
-      </div>
-    </div>
+    <div id="stickyNoticeStack" class="sticky-notice-stack" aria-live="polite"></div>
 
     <section class="card full quick-tools-card">
       <h2>🧰 바로가기</h2>
@@ -3756,5 +3750,193 @@ let allowSaveBeforeInitialSnapshot = false;
     .sticky-notice-paper { padding:8px 11px; font-size:12.5px; }
   }
 </style>
+
+<style id="mobileCompactAndMultiNoticePatch">
+  html, body { width:100%; max-width:100%; overflow-x:hidden; }
+  .sticky-notice-stack {
+    position:fixed; top:8px; left:50%; transform:translateX(-50%);
+    width:min(760px, calc(100vw - 20px)); z-index:9990;
+    display:grid; gap:7px; pointer-events:none;
+  }
+  .sticky-notice-stack .sticky-notice-ufo {
+    position:relative; inset:auto; left:auto; top:auto; width:100%;
+    transform:translateY(-18px) scale(.97); opacity:0;
+  }
+  .sticky-notice-stack .sticky-notice-ufo.show {
+    transform:translateY(0) scale(1); opacity:1; pointer-events:auto;
+  }
+  .sticky-notice-stack .sticky-notice-ufo.notice-complete {
+    animation:noticeFlyRightStack .62s cubic-bezier(.22,.8,.3,1) forwards;
+  }
+  @keyframes noticeFlyRightStack {
+    0%{transform:translateX(0) rotate(0);opacity:1}
+    35%{transform:translateX(22px) translateY(-5px) rotate(2deg);opacity:1}
+    100%{transform:translateX(115vw) translateY(-12px) rotate(8deg);opacity:0}
+  }
+  @media (max-width:700px) {
+    body { min-width:0 !important; }
+    .app { width:100% !important; max-width:100% !important; padding:7px 7px 22px !important; }
+    .topbar, .card, .top-checklist-card, .mini-notice-card, .quick-tools-card,
+    .grid, .preview-wrap, .history-card { width:100% !important; max-width:100% !important; min-width:0 !important; }
+    .topbar { position:relative !important; top:auto !important; padding:9px !important; }
+    .brand { min-width:0 !important; }
+    .brand h1 { font-size:13px !important; overflow-wrap:anywhere; }
+    .actions { grid-template-columns:1fr !important; }
+    .sound-controls { grid-column:auto !important; }
+    .card { padding:11px !important; border-radius:16px !important; }
+    .grid { display:grid !important; grid-template-columns:minmax(0,1fr) !important; gap:8px !important; }
+    .form-row, .form-row.two, .form-row.four, .lead-source-grid, .source-split,
+    .history-layout, .summary-stats, .compact-two, .announcement-row { grid-template-columns:minmax(0,1fr) !important; }
+    .quick-tools-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:7px !important; }
+    .quick-tool-app { min-width:0 !important; min-height:64px !important; padding:8px 5px !important; }
+    .top-checklist { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:6px !important; }
+    .top-checklist label { min-width:0 !important; min-height:42px !important; padding:8px !important; }
+    .mini-notice-row { grid-template-columns:minmax(0,1fr) !important; }
+    .notice-actions { grid-template-columns:1fr 1fr !important; }
+    .staff-row { grid-template-columns:minmax(0,1fr) !important; }
+    .counter { grid-template-columns:minmax(0,1fr) 34px 58px 34px !important; }
+    input, textarea, select { max-width:100% !important; }
+    .sticky-notice-stack { top:5px; width:calc(100vw - 12px); gap:5px; }
+    .sticky-notice-stack .sticky-notice-ufo { gap:4px; }
+    .sticky-notice-stack .sticky-notice-craft { width:40px; height:40px; min-width:40px; font-size:28px; }
+    .sticky-notice-stack .sticky-notice-paper { max-width:none; padding:7px 39px 7px 9px; font-size:11.5px; line-height:1.3; }
+    .sticky-notice-stack .sticky-notice-close { width:27px; height:27px; min-height:27px; font-size:17px; }
+  }
+  @media (max-width:390px) {
+    .top-checklist { grid-template-columns:minmax(0,1fr) !important; }
+    .quick-tools-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  }
+</style>
+<script id="healthSupportAndMultiNoticePatch">
+(function(){
+  let pinnedNotices = [];
+  const HEALTH_INTERVAL_MS = 30 * 60 * 1000;
+  let healthTimer = null;
+  let healthFlip = 0;
+
+  function noticeId(){ return 'notice_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
+  function syncLegacyNotice(){
+    const legacy=document.getElementById('pinnedNotice');
+    if(legacy) legacy.value = pinnedNotices.length ? pinnedNotices[pinnedNotices.length-1].text : '';
+  }
+  function renderPinnedNotices(options={}){
+    const stack=document.getElementById('stickyNoticeStack');
+    if(!stack) return;
+    stack.innerHTML=pinnedNotices.map((item,index)=>`<div class="sticky-notice-ufo show" data-notice-id="${escapeHtml(item.id)}" style="transition-delay:${index*55}ms">
+      <div class="sticky-notice-craft" aria-hidden="true">👽</div>
+      <div class="sticky-notice-paper"><span class="sticky-notice-title">NOTICE ${index+1}</span><span>${escapeHtml(item.text)}</span>
+      <button type="button" class="sticky-notice-close" onclick="dismissPinnedNoticeById('${item.id}')" aria-label="공지 완료 및 닫기" title="완료했어요">×</button></div></div>`).join('');
+    syncLegacyNotice();
+    if(options.popup && pinnedNotices.length){
+      const latest=pinnedNotices[pinnedNotices.length-1];
+      showSmartPopup('📌 새로운 공지', latest.text);
+    }
+  }
+  window.updatePinnedNoticeDisplay=function(options={}){ renderPinnedNotices(options); };
+  window.submitPinnedNotice=function(){
+    const draft=document.getElementById('pinnedNoticeDraft');
+    const msg=(draft?.value||'').trim();
+    if(!msg){ toast('공지 내용을 입력해주세요'); draft?.focus(); return; }
+    pinnedNotices.push({id:noticeId(), text:msg, createdAt:Date.now()});
+    if(draft) draft.value='';
+    renderPinnedNotices({popup:true});
+    updateAll();
+    if(window.forenaSaveNow) window.forenaSaveNow();
+    toast(`공지 ${pinnedNotices.length}개가 표시 중이에요`);
+  };
+  window.clearPinnedNotice=function(){
+    pinnedNotices=[];
+    const draft=document.getElementById('pinnedNoticeDraft'); if(draft) draft.value='';
+    renderPinnedNotices({popup:false}); updateAll();
+    if(window.forenaSaveNow) window.forenaSaveNow();
+    toast('모든 공지를 지웠어요');
+  };
+  window.dismissPinnedNoticeById=function(id){
+    const el=document.querySelector(`[data-notice-id="${CSS.escape(id)}"]`);
+    if(el) el.classList.add('notice-complete');
+    setTimeout(()=>{
+      pinnedNotices=pinnedNotices.filter(n=>n.id!==id);
+      renderPinnedNotices({popup:false}); updateAll();
+      if(window.forenaSaveNow) window.forenaSaveNow();
+      const msg=pickRandom(['GOOD JOB! 공지 업무 완료했어요 ✨','수고했어요! 하나 더 멋지게 완료 👏','MISSION COMPLETE! 최고예요 🌟']);
+      showSmartPopup('👽 GOOD JOB!',msg,'alienSupport'); showCheer('👽 '+msg); speakCheer(msg);
+    },620);
+  };
+  window.dismissPinnedNotice=function(){ if(pinnedNotices[0]) window.dismissPinnedNoticeById(pinnedNotices[0].id); };
+
+  const baseCollect=window.forenaCollectData || collectData;
+  const baseApply=window.forenaApplyData || applyData;
+  function patchedCollect(){
+    const data=baseCollect();
+    data.pinnedNotices=pinnedNotices.map(n=>({...n}));
+    return data;
+  }
+  function patchedApply(data){
+    baseApply(data);
+    if(Array.isArray(data?.pinnedNotices)) pinnedNotices=data.pinnedNotices.filter(n=>n&&n.text).map(n=>({id:n.id||noticeId(),text:String(n.text),createdAt:Number(n.createdAt||Date.now())}));
+    else if(data?.pinnedNotice) pinnedNotices=[{id:noticeId(),text:String(data.pinnedNotice),createdAt:Date.now()}];
+    else pinnedNotices=[];
+    renderPinnedNotices({popup:false});
+    restoreStaffSupportTimers();
+  }
+  window.forenaCollectData=patchedCollect;
+  window.forenaApplyData=patchedApply;
+  window.collectData=patchedCollect;
+  window.applyData=patchedApply;
+
+  function dueFromStartTime(start){
+    if(!/^\d{2}:\d{2}$/.test(start||'')) return 0;
+    const [h,m]=start.split(':').map(Number);
+    const nowK=koreaNow();
+    const dueK=new Date(nowK); dueK.setHours(h,m+30,0,0);
+    return Date.now() + (dueK.getTime()-nowK.getTime());
+  }
+  window.scheduleStaffSupport=function(index){
+    normalizeStaff(); const member=staff[index]; if(!member) return;
+    const name=String(member.name||'').trim(); const start=String(member.start||'').trim();
+    if(!name || !start) return;
+    const nameKey=name.toLowerCase();
+    let dueAt=dueFromStartTime(start); if(!dueAt) return;
+    const now=Date.now();
+    const others=staff.map((s,i)=>i===index?0:Number(s.supportDueAt||0)).filter(t=>t>now-60000 && Math.abs(t-dueAt)<5*60000);
+    if(others.length) dueAt=Math.max(dueAt,Math.max(...others)+60*1000);
+    member.supportNameKey=nameKey; member.supportDueAt=dueAt; member.supportSent=false;
+    try{localStorage.setItem(supportStorageKey(nameKey),JSON.stringify({sent:false,dueAt,start}));}catch(e){}
+    armStaffSupportTimer(index); updateAll();
+    toast(`${name} 응원 메시지는 출근 30분 후에 나와요 👽`);
+  };
+  document.addEventListener('change',e=>{
+    if(e.target && e.target.matches('.staff-row input[type="time"]')){
+      const row=[...document.querySelectorAll('.staff-row')].indexOf(e.target.closest('.staff-row'));
+      if(row>=0) setTimeout(()=>window.scheduleStaffSupport(row),50);
+    }
+  });
+  document.addEventListener('blur',e=>{
+    if(e.target && e.target.matches('.staff-row input') && e.target.previousElementSibling?.textContent==='이름'){
+      const row=[...document.querySelectorAll('.staff-row')].indexOf(e.target.closest('.staff-row'));
+      if(row>=0) setTimeout(()=>window.scheduleStaffSupport(row),50);
+    }
+  },true);
+
+  function healthMessage(){
+    healthFlip++;
+    return healthFlip%2
+      ? '자세를 곧게 펴고 어깨 힘을 살짝 빼주세요. 목도 천천히 움직여요 🧘'
+      : '잠깐 화면에서 눈을 떼고 창밖이나 먼 곳을 20초 바라봐주세요 👀🌿';
+  }
+  function runHealthReminder(){
+    if(document.hidden || !isWorkingHoursNow()) return;
+    const msg=healthMessage();
+    showSmartPopup('🌿 건강 리마인더',msg,'alienSupport');
+    showCheer('🌿 잠깐 자세와 눈을 쉬어주세요'); speakCheer(msg);
+  }
+  function startHealthReminders(){
+    if(healthTimer) clearInterval(healthTimer);
+    healthTimer=setInterval(runHealthReminder,HEALTH_INTERVAL_MS);
+  }
+  document.addEventListener('DOMContentLoaded',()=>{ renderPinnedNotices({popup:false}); startHealthReminders(); });
+})();
+</script>
+
 </body>
 </html>
