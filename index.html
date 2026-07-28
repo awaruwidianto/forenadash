@@ -1378,13 +1378,13 @@ body::before {
 
 
 <style id="largerGameNotificationAndBalancedCounters">
-  /* Requested visual-only patch: larger game-style notifications. */
+  /* Requested visual-only patch: medium game-style notification. */
   .announcement-popup {
-    width: min(680px, calc(100vw - 28px));
-    min-height: 300px;
-    padding: 34px 34px 28px 190px;
+    width: min(560px, calc(100vw - 28px));
+    min-height: 230px;
+    padding: 26px 28px 22px 150px;
     border: 3px solid color-mix(in srgb, var(--hour-accent, #ff9fc9) 58%, #ffffff);
-    border-radius: 34px;
+    border-radius: 30px;
     overflow: visible;
     text-align: left;
     background:
@@ -1393,39 +1393,37 @@ body::before {
       linear-gradient(145deg, rgba(255,255,255,.99), #fff1f8 57%, #edfaff);
     background-size: 44px 44px, 68px 68px, auto;
     box-shadow:
-      0 28px 80px rgba(7,4,33,.42),
-      0 0 0 7px rgba(255,255,255,.22),
+      0 24px 64px rgba(7,4,33,.38),
+      0 0 0 6px rgba(255,255,255,.20),
       inset 0 1px 0 rgba(255,255,255,.95);
   }
-  .announcement-popup.show {
-    animation: bigGameNoticeIn .52s cubic-bezier(.2,.86,.24,1.16);
-  }
+  .announcement-popup.show { animation: bigGameNoticeIn .48s cubic-bezier(.2,.86,.24,1.16); }
   .announcement-popup::before {
     content: '🛸' !important;
     position: absolute !important;
-    left: 31px !important;
+    left: 24px !important;
     top: 50% !important;
-    width: 126px;
-    height: 126px;
+    width: 100px;
+    height: 100px;
     display: grid;
     place-items: center;
     transform: translateY(-54%);
-    border-radius: 38px;
-    font-size: 76px !important;
+    border-radius: 30px;
+    font-size: 60px !important;
     line-height: 1;
     background: linear-gradient(145deg, #ffffff, #ddf9ff 42%, #eee6ff 72%, #ffdce9);
     border: 3px solid rgba(91,67,151,.30);
-    box-shadow: 0 10px 0 rgba(74,53,129,.13), 0 20px 34px rgba(95,76,176,.24), inset 0 0 0 5px rgba(255,255,255,.68);
+    box-shadow: 0 8px 0 rgba(74,53,129,.13), 0 16px 28px rgba(95,76,176,.22), inset 0 0 0 4px rgba(255,255,255,.68);
     animation: noticeMascotTalk 1.45s ease-in-out infinite;
   }
   .announcement-popup.alien-support::before { content: '👽' !important; }
   .announcement-popup::after {
     content: '';
     position: absolute;
-    left: 73px;
-    bottom: 37px;
-    width: 72px;
-    height: 28px;
+    left: 51px;
+    bottom: 29px;
+    width: 56px;
+    height: 22px;
     border-radius: 50%;
     background: radial-gradient(ellipse, rgba(127,227,255,.72), rgba(127,227,255,0) 72%);
     filter: blur(4px);
@@ -1433,48 +1431,49 @@ body::before {
     pointer-events: none;
   }
   .announcement-popup h3 {
-    margin: 0 0 16px;
-    font-size: clamp(21px, 2.4vw, 29px);
+    margin: 0 0 12px;
+    font-size: clamp(19px, 2vw, 24px);
     line-height: 1.25;
     color: color-mix(in srgb, var(--hour-accent-strong, #d85f8a) 72%, #4d3b8d);
     text-shadow: 0 2px 0 #fff;
   }
   .announcement-popup p {
-    min-height: 82px;
-    margin: 0 0 22px;
-    padding: 18px 20px;
+    min-height: 66px;
+    margin: 0 0 16px;
+    padding: 14px 16px;
     border: 2px solid color-mix(in srgb, var(--hour-accent, #ff9fc9) 36%, white);
-    border-radius: 22px 22px 22px 7px;
+    border-radius: 20px 20px 20px 7px;
     background: rgba(255,255,255,.9);
     color: #352842;
-    font-size: clamp(17px, 2vw, 21px);
+    font-size: clamp(15px, 1.7vw, 18px);
     font-weight: 850;
-    line-height: 1.65;
-    box-shadow: 0 10px 24px rgba(91,67,151,.10);
+    line-height: 1.55;
+    box-shadow: 0 9px 20px rgba(91,67,151,.10);
   }
   .announcement-popup > button {
-    min-width: 118px;
-    min-height: 48px;
+    min-width: 104px;
+    min-height: 42px;
     float: right;
-    font-size: 15px;
-    border-radius: 16px;
+    font-size: 14px;
+    border-radius: 15px;
   }
   @keyframes bigGameNoticeIn {
-    0% { transform: translate(-50%,-50%) scale(.72) rotate(-3deg); opacity:0; }
-    68% { transform: translate(-50%,-50%) scale(1.035) rotate(1deg); opacity:1; }
+    0% { transform: translate(-50%,-50%) scale(.78) rotate(-2deg); opacity:0; }
+    68% { transform: translate(-50%,-50%) scale(1.025) rotate(.7deg); opacity:1; }
     100% { transform: translate(-50%,-50%) scale(1) rotate(0); opacity:1; }
   }
   @keyframes noticeMascotTalk {
     0%,100% { transform: translateY(-54%) rotate(-3deg) scale(1); }
-    45% { transform: translateY(-61%) rotate(3deg) scale(1.045); }
-    62% { transform: translateY(-57%) rotate(-1deg) scale(.98); }
+    45% { transform: translateY(-60%) rotate(3deg) scale(1.04); }
+    62% { transform: translateY(-57%) rotate(-1deg) scale(.985); }
   }
   @keyframes noticeBeamPulse {
     0%,100% { transform: scaleX(.78); opacity:.48; }
     50% { transform: scaleX(1.24); opacity:.9; }
   }
 
-  /* Make reservation change / walk-in / Facebook visually balanced. */
+  /* Keep the three counters harmonious and fully inside the frame. */
+  .compact-two-card { overflow: hidden; }
   .compact-two {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: stretch;
@@ -1485,48 +1484,56 @@ body::before {
     display: flex;
     flex-direction: column;
   }
-  .compact-panel h2 {
-    min-height: 24px;
-    margin-bottom: 10px;
-  }
+  .compact-panel h2 { min-height: 24px; margin-bottom: 10px; }
   .compact-panel .counter-list { flex: 1; }
+  .compact-panel .counter {
+    grid-template-columns: minmax(46px, 1fr) 31px minmax(54px, 68px) 31px;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+  }
+  .compact-panel .counter-name {
+    min-width: 0;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .compact-panel .counter input { min-width: 0; width: 100%; }
   .compact-panel:nth-child(-n+2) .counter-list {
     display: flex;
     align-items: center;
   }
-  .compact-panel:nth-child(-n+2) .counter { width: 100%; }
 
   @media (max-width: 700px) {
     .announcement-popup {
-      width: calc(100vw - 18px);
+      width: calc(100vw - 24px);
       min-height: 0;
-      padding: 96px 16px 18px;
-      border-radius: 27px;
+      padding: 82px 15px 16px;
+      border-radius: 25px;
       text-align: center;
     }
     .announcement-popup::before {
       left: 50% !important;
-      top: 12px !important;
-      width: 72px;
-      height: 72px;
+      top: 11px !important;
+      width: 62px;
+      height: 62px;
       transform: translateX(-50%) !important;
-      border-radius: 24px;
-      font-size: 45px !important;
+      border-radius: 21px;
+      font-size: 39px !important;
     }
     .announcement-popup::after {
       left: 50%;
-      top: 69px;
+      top: 59px;
       bottom: auto;
-      width: 55px;
-      height: 18px;
+      width: 47px;
+      height: 16px;
       transform: translateX(-50%);
     }
-    .announcement-popup h3 { font-size: 19px; margin-bottom: 10px; }
+    .announcement-popup h3 { font-size: 18px; margin-bottom: 9px; }
     .announcement-popup p {
       min-height: 0;
-      padding: 14px;
-      font-size: 16px;
-      line-height: 1.55;
+      padding: 12px 13px;
+      font-size: 15px;
+      line-height: 1.5;
       text-align: left;
     }
     .announcement-popup > button { float:none; width:100%; }
@@ -1536,6 +1543,171 @@ body::before {
 
   @media (prefers-reduced-motion: reduce) {
     .announcement-popup.show, .announcement-popup::before, .announcement-popup::after { animation:none !important; }
+  }
+</style>
+
+
+<style id="workingCrewMascotPatch">
+  /* Visual-only working crew mascots in the homepage row's open space. */
+  .working-crew-card {
+    position: relative;
+    overflow: hidden;
+    min-height: 264px;
+    background:
+      radial-gradient(circle at 18% 20%, rgba(255,255,255,.92) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 82% 28%, rgba(166,226,255,.72) 0 1.5px, transparent 2.5px),
+      linear-gradient(145deg, rgba(255,255,255,.94), rgba(255,241,248,.90) 58%, rgba(235,249,255,.92));
+    background-size: 46px 46px, 72px 72px, auto;
+  }
+  .working-crew-card::after {
+    content: '✦  ·  ✧  ·  ✦';
+    position: absolute;
+    right: 18px;
+    bottom: 14px;
+    color: rgba(111,82,191,.28);
+    letter-spacing: 8px;
+    font-size: 15px;
+    pointer-events: none;
+  }
+  .working-crew-stage {
+    position: relative;
+    min-height: 205px;
+    border: 1px dashed color-mix(in srgb, var(--hour-accent, #ff9fc9) 35%, white);
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,.52), rgba(237,248,255,.28));
+    overflow: hidden;
+  }
+  .working-crew-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-weight: 850;
+    text-align: center;
+    padding: 20px;
+  }
+  .crew-character {
+    --crew-x: 50%;
+    --crew-y: 52%;
+    position: absolute;
+    left: var(--crew-x);
+    top: var(--crew-y);
+    width: 112px;
+    transform: translate(-50%, -50%);
+    transition: left .48s cubic-bezier(.22,.8,.25,1), top .48s cubic-bezier(.22,.8,.25,1);
+    z-index: 2;
+    user-select: none;
+    touch-action: none;
+  }
+  .crew-bubble {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 7px);
+    transform: translateX(-50%);
+    min-width: 92px;
+    max-width: 150px;
+    padding: 8px 11px;
+    border-radius: 15px 15px 15px 5px;
+    border: 1px solid color-mix(in srgb, var(--hour-accent, #ff9fc9) 45%, white);
+    background: rgba(255,255,255,.96);
+    box-shadow: 0 8px 18px rgba(66,44,126,.14);
+    color: #4d3b78;
+    font-size: 11.5px;
+    font-weight: 900;
+    line-height: 1.35;
+    text-align: center;
+    white-space: nowrap;
+    animation: crewBubblePop .35s ease;
+    pointer-events: none;
+  }
+  .crew-avatar-wrap {
+    width: 78px;
+    height: 78px;
+    margin: 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 27px;
+    border: 3px solid rgba(103,78,171,.25);
+    background: linear-gradient(145deg,#fff,#e2f9ff 40%,#eee6ff 72%,#ffe2ef);
+    box-shadow: 0 7px 0 rgba(78,56,141,.10), 0 15px 28px rgba(83,62,155,.18), inset 0 0 0 4px rgba(255,255,255,.72);
+    font-size: 47px;
+    animation: crewFloat 2.6s ease-in-out infinite;
+    cursor: default;
+  }
+  .crew-name {
+    width: max-content;
+    max-width: 105px;
+    margin: 7px auto 0;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.92);
+    border: 1px solid rgba(246,190,209,.95);
+    color: var(--rose);
+    font-size: 12px;
+    font-weight: 950;
+    text-align: center;
+    box-shadow: 0 6px 13px rgba(216,95,138,.10);
+  }
+  .crew-character.evading .crew-avatar-wrap { animation: crewEscape .48s ease; }
+  .crew-character::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 68px;
+    width: 50px;
+    height: 15px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(ellipse, rgba(142,231,255,.58), rgba(142,231,255,0) 72%);
+    filter: blur(3px);
+    animation: crewGlow 1.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes crewFloat { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
+  @keyframes crewGlow { 50% { transform: translateX(-50%) scaleX(1.28); opacity:.55; } }
+  @keyframes crewEscape { 0% { transform: scale(1); } 45% { transform: scale(.88) rotate(-8deg); } 100% { transform: scale(1); } }
+  @keyframes crewBubblePop { from { opacity:0; transform:translateX(-50%) translateY(5px) scale(.9); } }
+
+  @media (max-width: 900px) {
+    .working-crew-card { min-height: 230px; }
+    .working-crew-stage { min-height: 176px; }
+    .crew-character { width: 96px; }
+    .crew-avatar-wrap { width: 66px; height: 66px; font-size: 39px; border-radius: 23px; }
+    .crew-character::after { top: 57px; }
+    .crew-bubble { font-size: 10.5px; min-width: 78px; max-width: 125px; padding: 7px 9px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .crew-avatar-wrap, .crew-character::after, .crew-bubble { animation: none !important; }
+  }
+</style>
+
+
+<style id="crewFarewellGamePatch">
+  .announcement-popup.goodbye-character::before {
+    content: attr(data-mascot) !important;
+    animation: farewellMascotWave 1.05s ease-in-out infinite !important;
+  }
+  .announcement-popup.goodbye-character {
+    background:
+      radial-gradient(circle at 84% 18%, rgba(255,244,176,.72) 0 2px, transparent 3px),
+      radial-gradient(circle at 18% 76%, rgba(255,180,220,.58) 0 2px, transparent 3px),
+      linear-gradient(145deg, rgba(255,255,255,.99), #fff4fb 58%, #eef8ff);
+  }
+  .crew-character.farewell .crew-avatar-wrap {
+    animation: crewFarewellWave .62s ease-in-out infinite alternate !important;
+  }
+  .crew-character.farewell .crew-bubble {
+    background: #fff8d9;
+    border-color: #ffd27c;
+  }
+  @keyframes farewellMascotWave {
+    0%,100% { transform: translateY(-54%) rotate(-5deg) scale(1); }
+    50% { transform: translateY(-60%) rotate(7deg) scale(1.06); }
+  }
+  @keyframes crewFarewellWave {
+    from { transform: translateY(0) rotate(-7deg) scale(1); }
+    to { transform: translateY(-8px) rotate(8deg) scale(1.07); }
   }
 </style>
 
@@ -1677,7 +1849,15 @@ body::before {
         </div>
       </section>
 
-      <section class="card compact-two-card">
+
+      <section class="card working-crew-card" id="workingCrewCard">
+        <h2>👾 오늘의 출근자</h2>
+        <div class="working-crew-stage" id="workingCrewStage" aria-live="polite">
+          <div class="working-crew-empty" id="workingCrewEmpty">근무인원을 입력하면 귀여운 캐릭터가 나타나요 ✨</div>
+        </div>
+      </section>
+
+      <section class="card full compact-two-card">
         <div class="compact-two">
           <div class="compact-panel">
             <h2>🔁 예약변경</h2>
@@ -2614,7 +2794,8 @@ function showSmartPopup(title, message, mode='default'){
   const titleEl = pop?.querySelector('h3');
   const textEl = document.getElementById('announcementPopupText');
   if(!pop || !textEl) { alert(message); return; }
-  pop.classList.remove('reminder-sameday', 'reminder-markvu', 'alien-support');
+  pop.classList.remove('reminder-sameday', 'reminder-markvu', 'alien-support', 'goodbye-character');
+  pop.removeAttribute('data-mascot');
   if(mode === 'sameDay') pop.classList.add('reminder-sameday');
   if(mode === 'markvu') pop.classList.add('reminder-markvu');
   if(mode === 'alienSupport') pop.classList.add('alien-support');
@@ -2664,6 +2845,29 @@ function maybeRunTimedReminders(){
     speakCheer(msg);
   }
 }
+function staffFarewellEmoji(name){
+  const key=String(name||'').trim().toLowerCase();
+  if(['와루','waru','awaru'].some(v=>key.includes(v))) return '🦖';
+  if(['요셉','yosep','joseph'].some(v=>key.includes(v))) return '🐱';
+  if(['형규','영규','hyunggyu','younggyu'].some(v=>key.includes(v))) return '🐻';
+  if(['유진','yujin'].some(v=>key.includes(v))) return '🐰';
+  if(['소희','소희m','sohee'].some(v=>key.includes(v))) return '🐶';
+  return '👽';
+}
+function showStaffFarewell(name){
+  const mascot=staffFarewellEmoji(name);
+  const msg=`${name}님, 오늘도 수고하셨습니다~ 조심히 들어가세요! 💗`;
+  showSmartPopup('🌙 퇴근 인사', msg);
+  const pop=document.getElementById('announcementPopup');
+  if(pop){
+    pop.dataset.mascot=mascot;
+    pop.classList.add('goodbye-character');
+  }
+  showCheer(`${mascot} ${name}님 수고하셨습니다~`);
+  speakCheer(msg);
+  document.dispatchEvent(new CustomEvent('forenaCrewFarewell',{detail:{name, mascot, message:'수고하셨습니다~ 👋'}}));
+}
+
 function maybeRunStaffLeaveAlerts(){
   if(!isWorkingHoursNow()) return;
   const now = koreaNow();
@@ -2678,9 +2882,7 @@ function maybeRunStaffLeaveAlerts(){
     const key = `forenaLeaveAlert_${todayKoreaDateString()}_${name}_${s.end}`;
     if(currentMins >= endMins && currentMins <= 1230 && !localStorage.getItem(key)){
       localStorage.setItem(key, 'shown');
-      const msg = `${name} 수고하셨습니다. 일퇴하세요`;
-      showSmartPopup('🏁 퇴근 알림', msg);
-      speakCheer(msg);
+      showStaffFarewell(name);
     }
   });
 }
@@ -4099,6 +4301,134 @@ let allowSaveBeforeInitialSnapshot = false;
     healthTimer=setInterval(runHealthReminder,HEALTH_INTERVAL_MS);
   }
   document.addEventListener('DOMContentLoaded',()=>{ renderPinnedNotices({popup:false}); startHealthReminders(); });
+})();
+</script>
+
+
+<script id="workingCrewMascotScript">
+(function(){
+  const avatarMap = [
+    {keys:['와루','waru','awaru'], emoji:'🦖'},
+    {keys:['요셉','yosep','joseph'], emoji:'🐱'},
+    {keys:['형규','영규','hyunggyu','younggyu'], emoji:'🐻'},
+    {keys:['유진','yujin'], emoji:'🐰'},
+    {keys:['소희','소희m','sohee'], emoji:'🐶'}
+  ];
+  const crewLines = ['화이팅! 💗','오늘도 최고! ✨','힘들어...🥹','커피 주세요 ☕','예약 많이 와라~','퇴근 언제...?','우리 팀 최고!','천천히 해도 괜찮아 🌟'];
+  let bubbleTimer = null;
+  let lastNamesKey = '';
+  const farewellGrace = new Map();
+
+  function crewEmoji(name){
+    const key=String(name||'').trim().toLowerCase();
+    const hit=avatarMap.find(item=>item.keys.some(k=>key.includes(k)));
+    return hit ? hit.emoji : '👽';
+  }
+  function activeCrewNames(){
+    try {
+      if(typeof normalizeStaff==='function') normalizeStaff();
+      const now = typeof koreaNow === 'function' ? koreaNow() : new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      return (Array.isArray(window.staff) ? window.staff : (typeof staff!=='undefined' ? staff : []))
+        .filter(s=>{
+          if(!String(s.name||'').trim() || String(s.place||'')==='휴무') return false;
+          const end = String(s.end||'').trim();
+          if(!end) return true;
+          const match = end.match(/^(\d{1,2}):(\d{2})$/);
+          if(!match) return true;
+          const endMinutes = Number(match[1]) * 60 + Number(match[2]);
+          const nameKey=String(s.name||'').trim().toLowerCase();
+          const graceUntil=Number(farewellGrace.get(nameKey)||0);
+          return currentMinutes < endMinutes || Date.now() < graceUntil;
+        })
+        .map(s=>String(s.name||'').trim());
+    } catch(e){ return []; }
+  }
+  function positions(count){
+    if(count<=1) return [[67,55]];
+    if(count===2) return [[42,57],[76,47]];
+    if(count===3) return [[34,58],[62,42],[82,65]];
+    if(count===4) return [[28,43],[52,66],[73,38],[84,69]];
+    return [[24,42],[45,68],[62,37],[78,60],[88,33]];
+  }
+  function randomLine(){ return crewLines[Math.floor(Math.random()*crewLines.length)]; }
+  function updateBubble(){
+    const chars=[...document.querySelectorAll('.crew-character')];
+    chars.forEach(c=>{ const b=c.querySelector('.crew-bubble'); if(b) b.textContent=randomLine(); });
+  }
+  function evadeCharacter(char, pointerX, pointerY){
+    const stage=document.getElementById('workingCrewStage');
+    if(!stage || !char || char.dataset.evading==='1') return;
+    const sr=stage.getBoundingClientRect();
+    const cr=char.getBoundingClientRect();
+    const cx=cr.left+cr.width/2, cy=cr.top+cr.height/2;
+    const dx=cx-pointerX, dy=cy-pointerY;
+    const dist=Math.hypot(dx,dy);
+    if(dist>105) return;
+    char.dataset.evading='1';
+    char.classList.add('evading');
+    const ang=Math.atan2(dy || (Math.random()-.5), dx || (Math.random()-.5));
+    const move=90;
+    const nx=Math.max(14,Math.min(88,((cx-sr.left+Math.cos(ang)*move)/sr.width)*100));
+    const ny=Math.max(24,Math.min(78,((cy-sr.top+Math.sin(ang)*move)/sr.height)*100));
+    char.style.setProperty('--crew-x',nx.toFixed(1)+'%');
+    char.style.setProperty('--crew-y',ny.toFixed(1)+'%');
+    const bubble=char.querySelector('.crew-bubble');
+    if(bubble) bubble.textContent='앗! 잡지마 😳';
+    setTimeout(()=>{ char.classList.remove('evading'); char.dataset.evading='0'; },520);
+    setTimeout(()=>{ if(bubble) bubble.textContent=randomLine(); },1500);
+  }
+  function renderWorkingCrew(){
+    const stage=document.getElementById('workingCrewStage');
+    const empty=document.getElementById('workingCrewEmpty');
+    if(!stage) return;
+    const names=activeCrewNames().slice(0,5);
+    const key=names.join('|');
+    if(key===lastNamesKey) return;
+    lastNamesKey=key;
+    stage.querySelectorAll('.crew-character').forEach(el=>el.remove());
+    if(empty) empty.style.display=names.length?'none':'grid';
+    const pos=positions(names.length);
+    names.forEach((name,i)=>{
+      const el=document.createElement('div');
+      el.className='crew-character';
+      el.style.setProperty('--crew-x',pos[i][0]+'%');
+      el.style.setProperty('--crew-y',pos[i][1]+'%');
+      el.innerHTML='<div class="crew-bubble">'+randomLine()+'</div><div class="crew-avatar-wrap">'+crewEmoji(name)+'</div><div class="crew-name">'+escapeHtml(name)+'</div>';
+      stage.appendChild(el);
+    });
+  }
+  function initCrew(){
+    const stage=document.getElementById('workingCrewStage');
+    if(!stage) return;
+    renderWorkingCrew();
+    document.addEventListener('forenaCrewFarewell',e=>{
+      const name=String(e.detail?.name||'').trim();
+      if(!name) return;
+      const nameKey=name.toLowerCase();
+      farewellGrace.set(nameKey,Date.now()+4200);
+      lastNamesKey='';
+      renderWorkingCrew();
+      const target=[...stage.querySelectorAll('.crew-character')].find(ch=>String(ch.querySelector('.crew-name')?.textContent||'').trim().toLowerCase()===nameKey);
+      if(target){
+        target.classList.add('farewell');
+        const bubble=target.querySelector('.crew-bubble');
+        if(bubble) bubble.textContent='수고하셨습니다~ 👋';
+      }
+      setTimeout(()=>{
+        farewellGrace.delete(nameKey);
+        lastNamesKey='';
+        renderWorkingCrew();
+      },4300);
+    });
+    stage.addEventListener('pointermove',e=>{
+      stage.querySelectorAll('.crew-character').forEach(ch=>evadeCharacter(ch,e.clientX,e.clientY));
+    },{passive:true});
+    clearInterval(bubbleTimer);
+    bubbleTimer=setInterval(updateBubble,6500);
+    setInterval(renderWorkingCrew,1200);
+  }
+  document.addEventListener('DOMContentLoaded',initCrew);
 })();
 </script>
 
