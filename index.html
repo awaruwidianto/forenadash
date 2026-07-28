@@ -1375,6 +1375,170 @@ body::before {
     }
   </style>
 
+
+
+<style id="largerGameNotificationAndBalancedCounters">
+  /* Requested visual-only patch: larger game-style notifications. */
+  .announcement-popup {
+    width: min(680px, calc(100vw - 28px));
+    min-height: 300px;
+    padding: 34px 34px 28px 190px;
+    border: 3px solid color-mix(in srgb, var(--hour-accent, #ff9fc9) 58%, #ffffff);
+    border-radius: 34px;
+    overflow: visible;
+    text-align: left;
+    background:
+      radial-gradient(circle at 16% 22%, rgba(255,255,255,.98) 0 2px, transparent 3px),
+      radial-gradient(circle at 88% 18%, rgba(142,231,255,.72) 0 2px, transparent 3px),
+      linear-gradient(145deg, rgba(255,255,255,.99), #fff1f8 57%, #edfaff);
+    background-size: 44px 44px, 68px 68px, auto;
+    box-shadow:
+      0 28px 80px rgba(7,4,33,.42),
+      0 0 0 7px rgba(255,255,255,.22),
+      inset 0 1px 0 rgba(255,255,255,.95);
+  }
+  .announcement-popup.show {
+    animation: bigGameNoticeIn .52s cubic-bezier(.2,.86,.24,1.16);
+  }
+  .announcement-popup::before {
+    content: '🛸' !important;
+    position: absolute !important;
+    left: 31px !important;
+    top: 50% !important;
+    width: 126px;
+    height: 126px;
+    display: grid;
+    place-items: center;
+    transform: translateY(-54%);
+    border-radius: 38px;
+    font-size: 76px !important;
+    line-height: 1;
+    background: linear-gradient(145deg, #ffffff, #ddf9ff 42%, #eee6ff 72%, #ffdce9);
+    border: 3px solid rgba(91,67,151,.30);
+    box-shadow: 0 10px 0 rgba(74,53,129,.13), 0 20px 34px rgba(95,76,176,.24), inset 0 0 0 5px rgba(255,255,255,.68);
+    animation: noticeMascotTalk 1.45s ease-in-out infinite;
+  }
+  .announcement-popup.alien-support::before { content: '👽' !important; }
+  .announcement-popup::after {
+    content: '';
+    position: absolute;
+    left: 73px;
+    bottom: 37px;
+    width: 72px;
+    height: 28px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, rgba(127,227,255,.72), rgba(127,227,255,0) 72%);
+    filter: blur(4px);
+    animation: noticeBeamPulse 1.45s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .announcement-popup h3 {
+    margin: 0 0 16px;
+    font-size: clamp(21px, 2.4vw, 29px);
+    line-height: 1.25;
+    color: color-mix(in srgb, var(--hour-accent-strong, #d85f8a) 72%, #4d3b8d);
+    text-shadow: 0 2px 0 #fff;
+  }
+  .announcement-popup p {
+    min-height: 82px;
+    margin: 0 0 22px;
+    padding: 18px 20px;
+    border: 2px solid color-mix(in srgb, var(--hour-accent, #ff9fc9) 36%, white);
+    border-radius: 22px 22px 22px 7px;
+    background: rgba(255,255,255,.9);
+    color: #352842;
+    font-size: clamp(17px, 2vw, 21px);
+    font-weight: 850;
+    line-height: 1.65;
+    box-shadow: 0 10px 24px rgba(91,67,151,.10);
+  }
+  .announcement-popup > button {
+    min-width: 118px;
+    min-height: 48px;
+    float: right;
+    font-size: 15px;
+    border-radius: 16px;
+  }
+  @keyframes bigGameNoticeIn {
+    0% { transform: translate(-50%,-50%) scale(.72) rotate(-3deg); opacity:0; }
+    68% { transform: translate(-50%,-50%) scale(1.035) rotate(1deg); opacity:1; }
+    100% { transform: translate(-50%,-50%) scale(1) rotate(0); opacity:1; }
+  }
+  @keyframes noticeMascotTalk {
+    0%,100% { transform: translateY(-54%) rotate(-3deg) scale(1); }
+    45% { transform: translateY(-61%) rotate(3deg) scale(1.045); }
+    62% { transform: translateY(-57%) rotate(-1deg) scale(.98); }
+  }
+  @keyframes noticeBeamPulse {
+    0%,100% { transform: scaleX(.78); opacity:.48; }
+    50% { transform: scaleX(1.24); opacity:.9; }
+  }
+
+  /* Make reservation change / walk-in / Facebook visually balanced. */
+  .compact-two {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  .compact-panel {
+    height: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .compact-panel h2 {
+    min-height: 24px;
+    margin-bottom: 10px;
+  }
+  .compact-panel .counter-list { flex: 1; }
+  .compact-panel:nth-child(-n+2) .counter-list {
+    display: flex;
+    align-items: center;
+  }
+  .compact-panel:nth-child(-n+2) .counter { width: 100%; }
+
+  @media (max-width: 700px) {
+    .announcement-popup {
+      width: calc(100vw - 18px);
+      min-height: 0;
+      padding: 96px 16px 18px;
+      border-radius: 27px;
+      text-align: center;
+    }
+    .announcement-popup::before {
+      left: 50% !important;
+      top: 12px !important;
+      width: 72px;
+      height: 72px;
+      transform: translateX(-50%) !important;
+      border-radius: 24px;
+      font-size: 45px !important;
+    }
+    .announcement-popup::after {
+      left: 50%;
+      top: 69px;
+      bottom: auto;
+      width: 55px;
+      height: 18px;
+      transform: translateX(-50%);
+    }
+    .announcement-popup h3 { font-size: 19px; margin-bottom: 10px; }
+    .announcement-popup p {
+      min-height: 0;
+      padding: 14px;
+      font-size: 16px;
+      line-height: 1.55;
+      text-align: left;
+    }
+    .announcement-popup > button { float:none; width:100%; }
+    .compact-two { grid-template-columns: minmax(0,1fr) !important; }
+    .compact-panel:nth-child(-n+2) .counter-list { display:grid; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .announcement-popup.show, .announcement-popup::before, .announcement-popup::after { animation:none !important; }
+  }
+</style>
+
 </head>
 <body>
   <div class="sparkle-sky" aria-hidden="true"><span>✦</span><span>✧</span><span>✦</span><span>✧</span><span>✦</span><span>✧</span><span>✦</span><span>✧</span><span>✦</span><span>⋆</span><span>✦</span><span>·</span><span>✧</span><span>⋆</span></div>
