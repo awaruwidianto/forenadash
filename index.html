@@ -1650,6 +1650,8 @@ body::before {
     box-shadow: 0 6px 13px rgba(216,95,138,.10);
   }
   .crew-character.evading .crew-avatar-wrap { animation: crewEscape .48s ease; }
+  .crew-character.autowalking .crew-avatar-wrap { animation: crewFloat 2.6s ease-in-out infinite, crewTinyWalk .55s ease-in-out infinite alternate; }
+  @keyframes crewTinyWalk { from { rotate: -2deg; } to { rotate: 3deg; } }
   .crew-character::after {
     content: '';
     position: absolute;
@@ -1791,7 +1793,7 @@ body::before {
         <div class="form-row four">
           <div><label>오늘 날짜</label><input id="reportDateDisplay" type="text" readonly /></div>
           <div><label>보고 날짜</label><input id="reportDate" type="date" /></div>
-          <div><label>보고 기준 시간</label><input id="reportTime" type="time" value="08:30" /></div>
+          <div><label>보고 기준 시간</label><input id="reportTime" type="time" value="20:30" /></div>
           <div><label>보고자</label><input id="reporter" placeholder="예: 와루" /></div>
         </div>
         <div class="form-row two">
@@ -2378,8 +2380,18 @@ function defaultStaffForShift(type){
     {name:'유진', start:'10:30', end:'20:30', place:'사무실', note:'', breakState:{}}
   ];
 }
+function defaultReportTimeForShift(type = currentShiftType){
+  return type === 'weekend' ? '17:00' : '20:30';
+}
+function setDefaultReportTimeForShift(type = currentShiftType, force = false){
+  const el = document.getElementById('reportTime');
+  if(!el) return;
+  const knownDefaults = new Set(['08:30','20:30','17:00']);
+  if(force || !el.value || knownDefaults.has(el.value)) el.value = defaultReportTimeForShift(type);
+}
 function setShift(type, options = {}){
   currentShiftType = type === 'weekend' ? 'weekend' : 'weekday';
+  setDefaultReportTimeForShift(currentShiftType, !!options.forceReportTime);
   document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
   document.querySelector(`[data-shift="${currentShiftType}"]`)?.classList.add('active');
   // Safety: do NOT auto-fill default staff on a new day/page load.
@@ -3240,7 +3252,7 @@ async function sendTeamAnnouncement(){
 function reportText(){
   const t = totals();
   const date = formatShortDate(text('reportDate'));
-  const reportTime = text('reportTime') || '08:30';
+  const reportTime = text('reportTime') || defaultReportTimeForShift();
   const timeLabel = `${reportTime} 기준`;
   return `원장님 안녕하세요~!\n\n🔸${date} CS 예약보고 (${timeLabel})\n\n금일 총 예약건 ${t.reservations}건(다른 날짜 포함), 당일예약 ${t.sameDay}명(전화예약제외), 워크인 ${t.walkin}건, 예약취소 ${t.cancels}건, 변경 ${t.changes}건입니다.\n\n근무인원:\n${staffLineText() || '-'}\n\n<취소 사유>\n**${text('cancelReason') || '없음'}\n\n<특이 사항>\n**${text('notes') || '없음'}\n\n구체적인 현황도 같이 전달드립니다.\n\n🌐 홈페이지\n- 예약: ${n('home_res')}건 (당예포함)\n- 추가예약: ${n('wix_res')}건 (1인 대표예약 추가인원 수)\n- 당예: ${n('home_same')}건\n- 취소: ${n('home_cancel')}건\n\n🔁 예약변경\n- 변경: ${n('home_change')}건\n\n🚶 워크인\n- 워크인: ${n('walkin_count')}건\n\n💬 왓츠앱\n- 예약: ${n('wa_res')}건\n- 당예: ${n('wa_same')}건\n- 취소: ${n('wa_cancel')}건\n<${sourceLine()}>\n\n📸 인스타\n- 본계정 + 부계정 예약: ${n('ig_res')}건\n- 본계정 + 부계정 당일 예약: ${n('ig_same')}건\n- 베타 예약: ${n('ig_beta')}건\n- 취소: ${n('ig_cancel')}건\n\n📘 페이스북\n- 예약: ${n('fb_res')}건\n- 취소: ${n('fb_cancel')}건\n\n🤝 업체등\n${agencyLines()}\n\n🎵 틱톡\n- 예약: ${n('tt_res')}건\n- 베타 예약: ${n('tt_beta')}건\n- 취소: ${n('tt_cancel')}건\n\n✉️ 이메일\n- 당예: ${n('email_same')}건\n- 예약: ${n('email_res')}건\n- 취소: ${n('email_cancel')}건\n\n\n--\n\n💌 문의\n- 인스타 일반 문의 = ${n('inq_ig')}건\n- 왓츠앱 일반 문의 = 답변드린 거 대략 ${n('inq_wa')}건\n- 틱톡 일반 문의 = ${n('inq_tt')}건\n- 이메일 일반 문의 = ${n('inq_email')}건\n- 메신저 문의 = ${n('inq_msg')}건`;
 }
@@ -3248,7 +3260,7 @@ function reportText(){
 function updatePreview(){
   const t = totals();
   const date = formatShortDate(text('reportDate'));
-  const reportTime = text('reportTime') || '08:30';
+  const reportTime = text('reportTime') || defaultReportTimeForShift();
   const timeLabel = `${reportTime} 기준`;
   document.getElementById('reportPreview').innerHTML = `
     <h3>🔸${date} CS 예약보고 (${escapeHtml(timeLabel)})</h3>
@@ -3320,7 +3332,7 @@ async function resetAll(){
   document.querySelectorAll('input[type="number"]').forEach(el=>el.value=0);
   document.querySelectorAll('textarea').forEach(el=>el.value='');
   ensureReportDate();
-  document.getElementById('reportTime').value = '08:30';
+  setDefaultReportTimeForShift(currentShiftType, true);
   document.getElementById('reporter').value = '';
   applyChecklist({});
   staff = [];
@@ -3427,7 +3439,7 @@ function clearFormForNewKoreaDate(){
   const reporterEl = document.getElementById('reporter');
   if(reporterEl) reporterEl.value = '';
   const reportTimeEl = document.getElementById('reportTime');
-  if(reportTimeEl) reportTimeEl.value = '08:30';
+  if(reportTimeEl) reportTimeEl.value = defaultReportTimeForShift(currentShiftType);
   applyChecklist({});
 }
 let lastManualReportDate = '';
@@ -4316,6 +4328,7 @@ let allowSaveBeforeInitialSnapshot = false;
   ];
   const crewLines = ['화이팅! 💗','오늘도 최고! ✨','힘들어...🥹','커피 주세요 ☕','예약 많이 와라~','퇴근 언제...?','우리 팀 최고!','천천히 해도 괜찮아 🌟'];
   let bubbleTimer = null;
+  let walkTimer = null;
   let lastNamesKey = '';
   const farewellGrace = new Map();
 
@@ -4345,16 +4358,44 @@ let allowSaveBeforeInitialSnapshot = false;
     } catch(e){ return []; }
   }
   function positions(count){
-    if(count<=1) return [[67,55]];
-    if(count===2) return [[42,57],[76,47]];
-    if(count===3) return [[34,58],[62,42],[82,65]];
-    if(count===4) return [[28,43],[52,66],[73,38],[84,69]];
-    return [[24,42],[45,68],[62,37],[78,60],[88,33]];
+    if(count<=1) return [[50,56]];
+    if(count===2) return [[31,57],[70,48]];
+    if(count===3) return [[22,59],[50,43],[78,61]];
+    if(count===4) return [[20,42],[42,66],[66,40],[83,67]];
+    return [[17,42],[35,67],[53,38],[70,64],[86,40]];
   }
   function randomLine(){ return crewLines[Math.floor(Math.random()*crewLines.length)]; }
   function updateBubble(){
-    const chars=[...document.querySelectorAll('.crew-character')];
-    chars.forEach(c=>{ const b=c.querySelector('.crew-bubble'); if(b) b.textContent=randomLine(); });
+    document.querySelectorAll('.crew-character').forEach(c=>{ const b=c.querySelector('.crew-bubble'); if(b) b.textContent=randomLine(); });
+  }
+  function currentPoint(char){
+    return [parseFloat(char.style.getPropertyValue('--crew-x'))||50, parseFloat(char.style.getPropertyValue('--crew-y'))||52];
+  }
+  function safeDestination(char, chars){
+    const others=chars.filter(c=>c!==char).map(currentPoint);
+    for(let tries=0; tries<24; tries++){
+      const point=[14+Math.random()*72, 34+Math.random()*38];
+      if(others.every(other=>Math.hypot(point[0]-other[0],(point[1]-other[1])*1.35)>=23)) return point;
+    }
+    const index=chars.indexOf(char);
+    return positions(chars.length)[index] || [50,52];
+  }
+  function moveCharactersNaturally(){
+    const stage=document.getElementById('workingCrewStage');
+    if(!stage || document.hidden) return;
+    const chars=[...stage.querySelectorAll('.crew-character')];
+    chars.forEach((char,index)=>{
+      if(char.dataset.evading==='1' || char.classList.contains('farewell')) return;
+      setTimeout(()=>{
+        const live=[...stage.querySelectorAll('.crew-character')];
+        if(!live.includes(char)) return;
+        const [x,y]=safeDestination(char,live);
+        char.classList.add('autowalking');
+        char.style.setProperty('--crew-x',x.toFixed(1)+'%');
+        char.style.setProperty('--crew-y',y.toFixed(1)+'%');
+        setTimeout(()=>char.classList.remove('autowalking'),850);
+      },index*170);
+    });
   }
   function evadeCharacter(char, pointerX, pointerY){
     const stage=document.getElementById('workingCrewStage');
@@ -4363,14 +4404,17 @@ let allowSaveBeforeInitialSnapshot = false;
     const cr=char.getBoundingClientRect();
     const cx=cr.left+cr.width/2, cy=cr.top+cr.height/2;
     const dx=cx-pointerX, dy=cy-pointerY;
-    const dist=Math.hypot(dx,dy);
-    if(dist>105) return;
+    if(Math.hypot(dx,dy)>105) return;
     char.dataset.evading='1';
     char.classList.add('evading');
+    const chars=[...stage.querySelectorAll('.crew-character')];
+    const [fallbackX,fallbackY]=safeDestination(char,chars);
     const ang=Math.atan2(dy || (Math.random()-.5), dx || (Math.random()-.5));
     const move=90;
-    const nx=Math.max(14,Math.min(88,((cx-sr.left+Math.cos(ang)*move)/sr.width)*100));
-    const ny=Math.max(24,Math.min(78,((cy-sr.top+Math.sin(ang)*move)/sr.height)*100));
+    let nx=Math.max(14,Math.min(88,((cx-sr.left+Math.cos(ang)*move)/sr.width)*100));
+    let ny=Math.max(30,Math.min(76,((cy-sr.top+Math.sin(ang)*move)/sr.height)*100));
+    const others=chars.filter(c=>c!==char).map(currentPoint);
+    if(!others.every(p=>Math.hypot(nx-p[0],(ny-p[1])*1.35)>=20)){ nx=fallbackX; ny=fallbackY; }
     char.style.setProperty('--crew-x',nx.toFixed(1)+'%');
     char.style.setProperty('--crew-y',ny.toFixed(1)+'%');
     const bubble=char.querySelector('.crew-bubble');
@@ -4415,17 +4459,16 @@ let allowSaveBeforeInitialSnapshot = false;
         const bubble=target.querySelector('.crew-bubble');
         if(bubble) bubble.textContent='수고하셨습니다~ 👋';
       }
-      setTimeout(()=>{
-        farewellGrace.delete(nameKey);
-        lastNamesKey='';
-        renderWorkingCrew();
-      },4300);
+      setTimeout(()=>{ farewellGrace.delete(nameKey); lastNamesKey=''; renderWorkingCrew(); },4300);
     });
     stage.addEventListener('pointermove',e=>{
       stage.querySelectorAll('.crew-character').forEach(ch=>evadeCharacter(ch,e.clientX,e.clientY));
     },{passive:true});
     clearInterval(bubbleTimer);
+    clearInterval(walkTimer);
     bubbleTimer=setInterval(updateBubble,6500);
+    walkTimer=setInterval(moveCharactersNaturally,2400);
+    setTimeout(moveCharactersNaturally,900);
     setInterval(renderWorkingCrew,1200);
   }
   document.addEventListener('DOMContentLoaded',initCrew);
