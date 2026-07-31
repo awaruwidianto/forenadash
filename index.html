@@ -1763,6 +1763,7 @@ body::before {
     <section class="card full mini-notice-card">
       <div class="mini-notice-row">
         <div class="mini-notice-label">📌 공지</div>
+        <select id="pinnedNoticeCreator" class="mini-notice-creator" aria-label="공지 작성자"><option value="">작성자 선택</option></select>
         <textarea id="pinnedNoticeDraft" class="mini-notice-input" placeholder="공지 내용을 입력한 뒤 등록해주세요 (여러 개 가능)"></textarea>
         <div class="notice-actions">
           <button type="button" class="small" onclick="submitPinnedNotice()">공지 등록</button>
@@ -1794,7 +1795,7 @@ body::before {
           <div><label>오늘 날짜</label><input id="reportDateDisplay" type="text" readonly /></div>
           <div><label>보고 날짜</label><input id="reportDate" type="date" /></div>
           <div><label>보고 기준 시간</label><input id="reportTime" type="time" value="20:30" /></div>
-          <div><label>보고자</label><input id="reporter" placeholder="예: 와루" /></div>
+          <div><label>보고자</label><input id="reporter" placeholder="이름" /></div>
         </div>
         <div class="form-row two">
           <div><label>취소 사유</label><textarea id="cancelReason" placeholder="예: 일정변경 / 비행기취소"></textarea></div>
@@ -2376,8 +2377,7 @@ function defaultStaffForShift(type){
   ];
   return [
     {name:'와루', start:'09:30', end:'19:30', place:'사무실', note:'', breakState:{}},
-    {name:'소희M', start:'10:00', end:'20:00', place:'원내', note:'', breakState:{}},
-    {name:'유진', start:'10:30', end:'20:30', place:'사무실', note:'', breakState:{}}
+        {name:'유진', start:'10:30', end:'20:30', place:'사무실', note:'', breakState:{}}
   ];
 }
 function defaultReportTimeForShift(type = currentShiftType){
@@ -3431,7 +3431,7 @@ document.addEventListener('change', e => {
 
 function clearFormForNewKoreaDate(){
   document.querySelectorAll('input[type="number"]').forEach(el => { el.value = 0; });
-  ['cancelReason','notes','pinnedNotice','pinnedNoticeDraft'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['cancelReason','notes','pinnedNoticeDraft'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   blockedTimes = [];
   updatePinnedNoticeDisplay();
   renderBlockedTimeButtons();
@@ -3606,6 +3606,17 @@ let allowSaveBeforeInitialSnapshot = false;
   } else {
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
+
+    const globalNoticesRef = ref(db, "globalPinnedNotices/current");
+    window.forenaSaveGlobalNotices = async function(notices){
+      try {
+        await set(globalNoticesRef, { notices: Array.isArray(notices) ? notices : [], updatedAt: serverTimestamp() });
+      } catch(error) { console.error('Global notice save failed', error); }
+    };
+    onValue(globalNoticesRef, (snapshot) => {
+      const payload = snapshot.val();
+      if(window.forenaSetGlobalNotices) window.forenaSetGlobalNotices(Array.isArray(payload?.notices) ? payload.notices : []);
+    }, (error) => console.error('Global notice sync failed', error));
 
     function attachRealtimeListener(force = false) {
       const nextDateKey = currentReportDateKey();
@@ -4022,7 +4033,8 @@ let allowSaveBeforeInitialSnapshot = false;
     font-weight: 600;
   }
   textarea { overflow-anchor: none; }
-  .mini-notice-row { grid-template-columns: auto minmax(0,1fr) auto; align-items: center; }
+  .mini-notice-row { grid-template-columns: auto minmax(120px,170px) minmax(0,1fr) auto; align-items: center; }
+  .mini-notice-creator { min-width:120px; height:38px; padding:7px 10px; font-weight:850; }
   .mini-notice-input {
     height: 46px !important;
     min-height: 46px !important;
@@ -4188,11 +4200,61 @@ let allowSaveBeforeInitialSnapshot = false;
 <script id="healthSupportAndMultiNoticePatch">
 (function(){
   let pinnedNotices = [];
+  const GLOBAL_NOTICE_LOCAL_KEY = 'forenaGlobalPinnedNotices_v2';
   const HEALTH_INTERVAL_MS = 30 * 60 * 1000;
   let healthTimer = null;
   let healthFlip = 0;
+  const knownNoticeMascots = [
+    {keys:['와루','waru','awaru'], emoji:'🦖'},
+    {keys:['요셉','yosep','joseph'], emoji:'🐱'},
+    {keys:['형규','영규','hyunggyu','younggyu'], emoji:'🐻'},
+    {keys:['유진','yujin'], emoji:'🐰'}
+  ];
+  const guestMascots = ['🦊','🐼','🐯','🐨','🐹','🐸','🐧','🦄','🐙','🦋','🐬','🌸'];
 
   function noticeId(){ return 'notice_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
+  function hashText(value){ let h=0; for(const ch of String(value||'')) h=((h<<5)-h)+ch.charCodeAt(0)|0; return Math.abs(h); }
+  function mascotForCreator(name, savedMascot=''){
+    if(savedMascot) return savedMascot;
+    const key=String(name||'').trim().toLowerCase();
+    const hit=knownNoticeMascots.find(item=>item.keys.some(k=>key.includes(k)));
+    return hit ? hit.emoji : guestMascots[hashText(key || Date.now()) % guestMascots.length];
+  }
+  function saveNoticesLocal(){
+    try { localStorage.setItem(GLOBAL_NOTICE_LOCAL_KEY, JSON.stringify(pinnedNotices)); } catch(e) {}
+  }
+  function loadNoticesLocal(){
+    try {
+      const saved=JSON.parse(localStorage.getItem(GLOBAL_NOTICE_LOCAL_KEY)||'null');
+      if(Array.isArray(saved)) pinnedNotices=saved.filter(n=>n&&n.text).map(n=>({
+        id:n.id||noticeId(), text:String(n.text), creator:String(n.creator||''),
+        mascot:mascotForCreator(n.creator,n.mascot), createdAt:Number(n.createdAt||Date.now())
+      }));
+    } catch(e) {}
+  }
+  function syncGlobalNotices(){
+    saveNoticesLocal();
+    if(window.forenaSaveGlobalNotices) window.forenaSaveGlobalNotices(pinnedNotices.map(n=>({...n})));
+  }
+  function activeStaffNames(){
+    try {
+      if(typeof normalizeStaff==='function') normalizeStaff();
+      return (Array.isArray(staff)?staff:[])
+        .filter(s=>String(s.name||'').trim() && String(s.place||'')!=='휴무')
+        .map(s=>String(s.name||'').trim())
+        .filter((name,index,arr)=>arr.indexOf(name)===index);
+    } catch(e){ return []; }
+  }
+  function refreshNoticeCreatorOptions(){
+    const select=document.getElementById('pinnedNoticeCreator');
+    if(!select) return;
+    const previous=select.value;
+    const names=activeStaffNames();
+    select.innerHTML='<option value="">작성자 선택</option>'+names.map(name=>`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+    if(names.includes(previous)) select.value=previous;
+    else if(names.length===1) select.value=names[0];
+  }
+  window.refreshNoticeCreatorOptions=refreshNoticeCreatorOptions;
   function syncLegacyNotice(){
     const legacy=document.getElementById('pinnedNotice');
     if(legacy) legacy.value = pinnedNotices.length ? pinnedNotices[pinnedNotices.length-1].text : '';
@@ -4201,32 +4263,37 @@ let allowSaveBeforeInitialSnapshot = false;
     const stack=document.getElementById('stickyNoticeStack');
     if(!stack) return;
     stack.innerHTML=pinnedNotices.map((item,index)=>`<div class="sticky-notice-ufo show" data-notice-id="${escapeHtml(item.id)}" style="transition-delay:${index*55}ms">
-      <div class="sticky-notice-craft" aria-hidden="true">👽</div>
-      <div class="sticky-notice-paper"><span class="sticky-notice-title">NOTICE ${index+1}</span><span>${escapeHtml(item.text)}</span>
+      <div class="sticky-notice-craft" aria-hidden="true" title="${escapeHtml(item.creator||'작성자')}">${escapeHtml(mascotForCreator(item.creator,item.mascot))}</div>
+      <div class="sticky-notice-paper"><span class="sticky-notice-title">NOTICE ${index+1}${item.creator ? ' · '+escapeHtml(item.creator) : ''}</span><span>${escapeHtml(item.text)}</span>
       <button type="button" class="sticky-notice-close" onclick="dismissPinnedNoticeById('${item.id}')" aria-label="공지 완료 및 닫기" title="완료했어요">×</button></div></div>`).join('');
-    syncLegacyNotice();
+    syncLegacyNotice(); refreshNoticeCreatorOptions();
     if(options.popup && pinnedNotices.length){
       const latest=pinnedNotices[pinnedNotices.length-1];
-      showSmartPopup('📌 새로운 공지', latest.text);
+      showSmartPopup(`📌 ${latest.creator ? latest.creator+'님의 ' : ''}새로운 공지`, latest.text);
     }
   }
   window.updatePinnedNoticeDisplay=function(options={}){ renderPinnedNotices(options); };
+  window.forenaSetGlobalNotices=function(data){
+    if(!Array.isArray(data)) return;
+    pinnedNotices=data.filter(n=>n&&n.text).map(n=>({id:n.id||noticeId(),text:String(n.text),creator:String(n.creator||''),mascot:mascotForCreator(n.creator,n.mascot),createdAt:Number(n.createdAt||Date.now())}));
+    saveNoticesLocal(); renderPinnedNotices({popup:false});
+  };
   window.submitPinnedNotice=function(){
     const draft=document.getElementById('pinnedNoticeDraft');
+    const creatorSelect=document.getElementById('pinnedNoticeCreator');
     const msg=(draft?.value||'').trim();
+    const creator=(creatorSelect?.value||'').trim();
+    if(!creator){ toast('공지 작성자를 출근자 중에서 선택해주세요'); creatorSelect?.focus(); return; }
     if(!msg){ toast('공지 내용을 입력해주세요'); draft?.focus(); return; }
-    pinnedNotices.push({id:noticeId(), text:msg, createdAt:Date.now()});
+    pinnedNotices.push({id:noticeId(), text:msg, creator, mascot:mascotForCreator(creator), createdAt:Date.now()});
     if(draft) draft.value='';
-    renderPinnedNotices({popup:true});
-    updateAll();
-    if(window.forenaSaveNow) window.forenaSaveNow();
+    renderPinnedNotices({popup:true}); syncGlobalNotices();
     toast(`공지 ${pinnedNotices.length}개가 표시 중이에요`);
   };
   window.clearPinnedNotice=function(){
     pinnedNotices=[];
     const draft=document.getElementById('pinnedNoticeDraft'); if(draft) draft.value='';
-    renderPinnedNotices({popup:false}); updateAll();
-    if(window.forenaSaveNow) window.forenaSaveNow();
+    renderPinnedNotices({popup:false}); syncGlobalNotices();
     toast('모든 공지를 지웠어요');
   };
   window.dismissPinnedNoticeById=function(id){
@@ -4234,8 +4301,7 @@ let allowSaveBeforeInitialSnapshot = false;
     if(el) el.classList.add('notice-complete');
     setTimeout(()=>{
       pinnedNotices=pinnedNotices.filter(n=>n.id!==id);
-      renderPinnedNotices({popup:false}); updateAll();
-      if(window.forenaSaveNow) window.forenaSaveNow();
+      renderPinnedNotices({popup:false}); syncGlobalNotices();
       const msg=pickRandom(['GOOD JOB! 공지 업무 완료했어요 ✨','수고했어요! 하나 더 멋지게 완료 👏','MISSION COMPLETE! 최고예요 🌟']);
       showSmartPopup('👽 GOOD JOB!',msg,'alienSupport'); showCheer('👽 '+msg); speakCheer(msg);
     },620);
@@ -4246,16 +4312,16 @@ let allowSaveBeforeInitialSnapshot = false;
   const baseApply=window.forenaApplyData || applyData;
   function patchedCollect(){
     const data=baseCollect();
-    data.pinnedNotices=pinnedNotices.map(n=>({...n}));
+    // Notices are global and intentionally not tied to a report date.
+    delete data.pinnedNotices;
+    data.pinnedNotice='';
     return data;
   }
   function patchedApply(data){
     baseApply(data);
-    if(Array.isArray(data?.pinnedNotices)) pinnedNotices=data.pinnedNotices.filter(n=>n&&n.text).map(n=>({id:n.id||noticeId(),text:String(n.text),createdAt:Number(n.createdAt||Date.now())}));
-    else if(data?.pinnedNotice) pinnedNotices=[{id:noticeId(),text:String(data.pinnedNotice),createdAt:Date.now()}];
-    else pinnedNotices=[];
+    // Never clear global notices when a new report date has no notice data.
     renderPinnedNotices({popup:false});
-    restoreStaffSupportTimers();
+    restoreStaffSupportTimers(); refreshNoticeCreatorOptions();
   }
   window.forenaCollectData=patchedCollect;
   window.forenaApplyData=patchedApply;
@@ -4272,6 +4338,7 @@ let allowSaveBeforeInitialSnapshot = false;
   window.scheduleStaffSupport=function(index){
     normalizeStaff(); const member=staff[index]; if(!member) return;
     const name=String(member.name||'').trim(); const start=String(member.start||'').trim();
+    refreshNoticeCreatorOptions();
     if(!name || !start) return;
     const nameKey=name.toLowerCase();
     let dueAt=dueFromStartTime(start); if(!dueAt) return;
@@ -4283,11 +4350,13 @@ let allowSaveBeforeInitialSnapshot = false;
     armStaffSupportTimer(index); updateAll();
     toast(`${name} 응원 메시지는 출근 30분 후에 나와요 👽`);
   };
+  document.addEventListener('input',e=>{ if(e.target?.closest('.staff-row')) setTimeout(refreshNoticeCreatorOptions,30); });
   document.addEventListener('change',e=>{
     if(e.target && e.target.matches('.staff-row input[type="time"]')){
       const row=[...document.querySelectorAll('.staff-row')].indexOf(e.target.closest('.staff-row'));
       if(row>=0) setTimeout(()=>window.scheduleStaffSupport(row),50);
     }
+    if(e.target?.closest('.staff-row')) setTimeout(refreshNoticeCreatorOptions,30);
   });
   document.addEventListener('blur',e=>{
     if(e.target && e.target.matches('.staff-row input') && e.target.previousElementSibling?.textContent==='이름'){
@@ -4298,21 +4367,15 @@ let allowSaveBeforeInitialSnapshot = false;
 
   function healthMessage(){
     healthFlip++;
-    return healthFlip%2
-      ? '자세를 곧게 펴고 어깨 힘을 살짝 빼주세요. 목도 천천히 움직여요 🧘'
-      : '잠깐 화면에서 눈을 떼고 창밖이나 먼 곳을 20초 바라봐주세요 👀🌿';
+    return healthFlip%2 ? '자세를 곧게 펴고 어깨 힘을 살짝 빼주세요. 목도 천천히 움직여요 🧘' : '잠깐 화면에서 눈을 떼고 창밖이나 먼 곳을 20초 바라봐주세요 👀🌿';
   }
   function runHealthReminder(){
     if(document.hidden || !isWorkingHoursNow()) return;
     const msg=healthMessage();
-    showSmartPopup('🌿 건강 리마인더',msg,'alienSupport');
-    showCheer('🌿 잠깐 자세와 눈을 쉬어주세요'); speakCheer(msg);
+    showSmartPopup('🌿 건강 리마인더',msg,'alienSupport'); showCheer('🌿 잠깐 자세와 눈을 쉬어주세요'); speakCheer(msg);
   }
-  function startHealthReminders(){
-    if(healthTimer) clearInterval(healthTimer);
-    healthTimer=setInterval(runHealthReminder,HEALTH_INTERVAL_MS);
-  }
-  document.addEventListener('DOMContentLoaded',()=>{ renderPinnedNotices({popup:false}); startHealthReminders(); });
+  function startHealthReminders(){ if(healthTimer) clearInterval(healthTimer); healthTimer=setInterval(runHealthReminder,HEALTH_INTERVAL_MS); }
+  document.addEventListener('DOMContentLoaded',()=>{ loadNoticesLocal(); renderPinnedNotices({popup:false}); startHealthReminders(); refreshNoticeCreatorOptions(); });
 })();
 </script>
 
@@ -4323,8 +4386,7 @@ let allowSaveBeforeInitialSnapshot = false;
     {keys:['와루','waru','awaru'], emoji:'🦖'},
     {keys:['요셉','yosep','joseph'], emoji:'🐱'},
     {keys:['형규','영규','hyunggyu','younggyu'], emoji:'🐻'},
-    {keys:['유진','yujin'], emoji:'🐰'},
-    {keys:['소희','소희m','sohee'], emoji:'🐶'}
+    {keys:['유진','yujin'], emoji:'🐰'}
   ];
   const crewLines = ['화이팅! 💗','오늘도 최고! ✨','힘들어...🥹','커피 주세요 ☕','예약 많이 와라~','퇴근 언제...?','우리 팀 최고!','천천히 해도 괜찮아 🌟'];
   let bubbleTimer = null;
@@ -4335,7 +4397,9 @@ let allowSaveBeforeInitialSnapshot = false;
   function crewEmoji(name){
     const key=String(name||'').trim().toLowerCase();
     const hit=avatarMap.find(item=>item.keys.some(k=>key.includes(k)));
-    return hit ? hit.emoji : '👽';
+    const guest=['🦊','🐼','🐯','🐨','🐹','🐸','🐧','🦄','🐙','🦋','🐬','🌸'];
+    let hash=0; for(const ch of key) hash=((hash<<5)-hash)+ch.charCodeAt(0)|0;
+    return hit ? hit.emoji : guest[Math.abs(hash)%guest.length];
   }
   function activeCrewNames(){
     try {
