@@ -1670,6 +1670,42 @@ body::before {
   @keyframes crewGlow { 50% { transform: translateX(-50%) scaleX(1.28); opacity:.55; } }
   @keyframes crewEscape { 0% { transform: scale(1); } 45% { transform: scale(.88) rotate(-8deg); } 100% { transform: scale(1); } }
   @keyframes crewBubblePop { from { opacity:0; transform:translateX(-50%) translateY(5px) scale(.9); } }
+  .crew-character.sleeping .crew-avatar-wrap {
+    animation: crewSleepBob 2.4s ease-in-out infinite !important;
+    filter: saturate(.72) brightness(.98);
+  }
+  .crew-character.sleeping .crew-bubble {
+    background: #f2efff;
+    border-color: #c9bdf4;
+    color: #65549b;
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+  .crew-character.sleeping::before {
+    content: 'Z';
+    position: absolute;
+    left: 69%;
+    top: -8px;
+    z-index: 4;
+    color: #8069c7;
+    font-size: 18px;
+    font-weight: 950;
+    text-shadow: 0 2px 0 #fff;
+    animation: crewZzz 1.8s ease-out infinite;
+    pointer-events: none;
+  }
+  .crew-character.sleeping::after {
+    background: radial-gradient(ellipse, rgba(167,145,238,.52), rgba(167,145,238,0) 72%);
+  }
+  @keyframes crewSleepBob {
+    0%,100% { transform: translateY(1px) rotate(-5deg) scale(.98); }
+    50% { transform: translateY(5px) rotate(4deg) scale(.96); }
+  }
+  @keyframes crewZzz {
+    0% { transform: translate(0,8px) scale(.72); opacity:0; }
+    35% { opacity:1; }
+    100% { transform: translate(17px,-22px) scale(1.28); opacity:0; }
+  }
 
   @media (max-width: 900px) {
     .working-crew-card { min-height: 230px; }
@@ -1767,7 +1803,6 @@ body::before {
         <textarea id="pinnedNoticeDraft" class="mini-notice-input" placeholder="공지 내용을 입력한 뒤 등록해주세요 (여러 개 가능)"></textarea>
         <div class="notice-actions">
           <button type="button" class="small" onclick="submitPinnedNotice()">공지 등록</button>
-          <button type="button" class="secondary small" onclick="clearPinnedNotice()">공지 지우기</button>
         </div>
         <input id="pinnedNotice" type="hidden" value="" />
       </div>
@@ -2629,6 +2664,7 @@ function startStaffBreak(i, type){
   showSmartPopup('⏱️ 타이머 시작', msg);
   speakCheer(msg);
   updateBreakCountdowns();
+  if(window.syncWorkingCrewRestStates) window.syncWorkingCrewRestStates();
   saveData(false);
   if(window.forenaScheduleFirebaseSave) window.forenaScheduleFirebaseSave();
   toast(`${staff[i].name || '근무자'} ${breakLabel(type)} ${duration}분 시작!`);
@@ -4297,6 +4333,7 @@ let allowSaveBeforeInitialSnapshot = false;
     toast('모든 공지를 지웠어요');
   };
   window.dismissPinnedNoticeById=function(id){
+    if(!window.confirm('진짜 처리 완료인가요?')) return;
     const el=document.querySelector(`[data-notice-id="${CSS.escape(id)}"]`);
     if(el) el.classList.add('notice-complete');
     setTimeout(()=>{
@@ -4388,7 +4425,26 @@ let allowSaveBeforeInitialSnapshot = false;
     {keys:['형규','영규','hyunggyu','younggyu'], emoji:'🐻'},
     {keys:['유진','yujin'], emoji:'🐰'}
   ];
-  const crewLines = ['화이팅! 💗','오늘도 최고! ✨','힘들어...🥹','커피 주세요 ☕','예약 많이 와라~','퇴근 언제...?','우리 팀 최고!','천천히 해도 괜찮아 🌟'];
+  const crewLines = [
+    '화이팅! 💗','오늘도 최고! ✨','힘들어...🥹','커피 주세요 ☕','예약 많이 와라~',
+    '퇴근 언제...?','우리 팀 최고!','천천히 해도 괜찮아 🌟','오늘 점심 뭐 먹지?','I need coffee ☕',
+    '당예 들어오면 소리 질러~','집중 모드 ON!','오늘 느낌 좋은데?','One more booking! 🚀',
+    '눈 한 번 깜빡이기 👀','물 마셨어요? 💧','괜찮아, 잘하고 있어!','Let’s go team!'
+  ];
+  const crewConversations = [
+    ['오늘 예약 몇 건 갈 것 같아?','음... 많이! 느낌 좋아 ✨'],
+    ['커피 마셨어?','아직... 살려줘 ☕'],
+    ['점심 뭐 먹을까?','맛있는 거! 무조건 😋'],
+    ['오늘도 할 수 있지?','Of course! We got this 💗'],
+    ['당예 들어왔다!','대박! 축하 파티 🎉'],
+    ['나 조금 졸려...','눈 크게! 조금만 힘내 👀'],
+    ['퇴근까지 얼마나 남았지?','시간 보지 마... 더 느려져 😂'],
+    ['문의 많아?','응, 인기 폭발 중이야 🚀'],
+    ['나 잘하고 있지?','완전! You are doing great ✨'],
+    ['예약 하나만 더!','One more, one more! 🙌'],
+    ['오늘 팀워크 어때?','최고지. 말해 뭐해 💕'],
+    ['물 마셨어?','앗 지금 마실게 💧']
+  ];
   let bubbleTimer = null;
   let walkTimer = null;
   let lastNamesKey = '';
@@ -4429,8 +4485,46 @@ let allowSaveBeforeInitialSnapshot = false;
     return [[17,42],[35,67],[53,38],[70,64],[86,40]];
   }
   function randomLine(){ return crewLines[Math.floor(Math.random()*crewLines.length)]; }
+  function memberIsOnBreak(name){
+    try {
+      if(typeof normalizeStaff==='function') normalizeStaff();
+      const list=Array.isArray(window.staff) ? window.staff : (typeof staff!=='undefined' ? staff : []);
+      const member=list.find(s=>String(s.name||'').trim().toLowerCase()===String(name||'').trim().toLowerCase());
+      if(!member || !member.breakState) return false;
+      const types=(typeof currentShiftType!=='undefined' && currentShiftType==='weekend') ? ['lunch'] : ['lunch','rest'];
+      return types.some(type=>{
+        const endAt=Number(member.breakState[`${type}EndAt`]||0);
+        const done=!!member.breakState[`${type}Done`];
+        const paused=!!member.breakState[`${type}Paused`];
+        return endAt>Date.now() && !done && !paused;
+      });
+    } catch(e){ return false; }
+  }
+  function syncCrewRestStates(){
+    document.querySelectorAll('.crew-character').forEach(char=>{
+      const name=String(char.querySelector('.crew-name')?.textContent||'').trim();
+      const sleeping=memberIsOnBreak(name);
+      char.classList.toggle('sleeping',sleeping);
+      const bubble=char.querySelector('.crew-bubble');
+      if(sleeping && bubble) bubble.textContent='z z z... 💤';
+    });
+  }
+  window.syncWorkingCrewRestStates=syncCrewRestStates;
   function updateBubble(){
-    document.querySelectorAll('.crew-character').forEach(c=>{ const b=c.querySelector('.crew-bubble'); if(b) b.textContent=randomLine(); });
+    const chars=[...document.querySelectorAll('.crew-character')].filter(c=>!c.classList.contains('sleeping')&&!c.classList.contains('farewell'));
+    syncCrewRestStates();
+    const awake=chars.filter(c=>!c.classList.contains('sleeping'));
+    if(awake.length>=2 && Math.random()<.78){
+      const shuffled=[...awake].sort(()=>Math.random()-.5);
+      const pair=crewConversations[Math.floor(Math.random()*crewConversations.length)];
+      const first=shuffled[0]?.querySelector('.crew-bubble');
+      const second=shuffled[1]?.querySelector('.crew-bubble');
+      awake.forEach(c=>{ const b=c.querySelector('.crew-bubble'); if(b) b.textContent=randomLine(); });
+      if(first) first.textContent=pair[0];
+      if(second) second.textContent=pair[1];
+    } else {
+      awake.forEach(c=>{ const b=c.querySelector('.crew-bubble'); if(b) b.textContent=randomLine(); });
+    }
   }
   function currentPoint(char){
     return [parseFloat(char.style.getPropertyValue('--crew-x'))||50, parseFloat(char.style.getPropertyValue('--crew-y'))||52];
@@ -4449,7 +4543,7 @@ let allowSaveBeforeInitialSnapshot = false;
     if(!stage || document.hidden) return;
     const chars=[...stage.querySelectorAll('.crew-character')];
     chars.forEach((char,index)=>{
-      if(char.dataset.evading==='1' || char.classList.contains('farewell')) return;
+      if(char.dataset.evading==='1' || char.classList.contains('farewell') || char.classList.contains('sleeping')) return;
       setTimeout(()=>{
         const live=[...stage.querySelectorAll('.crew-character')];
         if(!live.includes(char)) return;
@@ -4463,7 +4557,7 @@ let allowSaveBeforeInitialSnapshot = false;
   }
   function evadeCharacter(char, pointerX, pointerY){
     const stage=document.getElementById('workingCrewStage');
-    if(!stage || !char || char.dataset.evading==='1') return;
+    if(!stage || !char || char.dataset.evading==='1' || char.classList.contains('sleeping')) return;
     const sr=stage.getBoundingClientRect();
     const cr=char.getBoundingClientRect();
     const cx=cr.left+cr.width/2, cy=cr.top+cr.height/2;
@@ -4492,7 +4586,7 @@ let allowSaveBeforeInitialSnapshot = false;
     if(!stage) return;
     const names=activeCrewNames().slice(0,5);
     const key=names.join('|');
-    if(key===lastNamesKey) return;
+    if(key===lastNamesKey){ syncCrewRestStates(); return; }
     lastNamesKey=key;
     stage.querySelectorAll('.crew-character').forEach(el=>el.remove());
     if(empty) empty.style.display=names.length?'none':'grid';
@@ -4505,6 +4599,7 @@ let allowSaveBeforeInitialSnapshot = false;
       el.innerHTML='<div class="crew-bubble">'+randomLine()+'</div><div class="crew-avatar-wrap">'+crewEmoji(name)+'</div><div class="crew-name">'+escapeHtml(name)+'</div>';
       stage.appendChild(el);
     });
+    syncCrewRestStates();
   }
   function initCrew(){
     const stage=document.getElementById('workingCrewStage');
