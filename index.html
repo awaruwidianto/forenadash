@@ -1811,6 +1811,42 @@ body::before {
   }
 </style>
 
+
+<style id="openingReportAndNoticeOverflowPatch">
+  .inquiry-report-card { background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(242,255,250,.94) 54%, rgba(248,243,255,.94)); }
+  .inquiry-section-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:12px; }
+  .inquiry-subcard { min-width:0; padding:14px; border-radius:18px; border:1px solid #bde9d1; background:rgba(255,255,255,.78); }
+  .inquiry-subcard h3 { margin:0 0 11px; font-size:15px; font-weight:950; color:#238654; }
+  .inquiry-extra-box { border-color:#cfc3f5; background:linear-gradient(135deg,rgba(255,255,255,.9),rgba(247,244,255,.92)); }
+  .inquiry-extra-box h3 { color:#6752a5; }
+  .inquiry-input-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .report-action-buttons { align-items:stretch; }
+  .closing-report-button { background:linear-gradient(135deg,var(--hour-accent,#ff9fc9),var(--hour-accent-strong,#d85f8a)) !important; }
+  .open-report-button { background:linear-gradient(135deg,#55cfa8,#6d68d9) !important; box-shadow:0 8px 18px rgba(77,156,154,.22) !important; }
+  .open-report-button:hover { background:linear-gradient(135deg,#3dbd94,#5952c7) !important; }
+
+  .sticky-notice-overflow-stack {
+    width:min(880px,100%); margin:0 auto 14px; display:grid; gap:7px; position:relative; z-index:5;
+  }
+  .sticky-notice-overflow-stack:empty { display:none; }
+  .sticky-notice-overflow-stack .sticky-notice-ufo {
+    position:relative; inset:auto; left:auto; top:auto; width:100%; transform:translateY(-8px) scale(.985); opacity:0; filter:drop-shadow(0 10px 18px rgba(5,3,25,.22));
+  }
+  .sticky-notice-overflow-stack .sticky-notice-ufo.show { transform:translateY(0) scale(1); opacity:1; pointer-events:auto; }
+  .sticky-notice-overflow-stack .sticky-notice-paper { max-width:none; flex:1; }
+  .sticky-notice-overflow-stack .sticky-notice-ufo.notice-complete { animation:noticeFlyRightStack .62s cubic-bezier(.22,.8,.3,1) forwards; }
+
+  @media(max-width:900px){
+    .inquiry-section-grid, .inquiry-input-grid { grid-template-columns:minmax(0,1fr); }
+  }
+  @media(max-width:700px){
+    .report-action-buttons { display:grid !important; grid-template-columns:1fr !important; }
+    .sticky-notice-overflow-stack { width:100%; margin-bottom:9px; gap:5px; }
+    .sticky-notice-overflow-stack .sticky-notice-ufo { gap:4px; }
+    .sticky-notice-overflow-stack .sticky-notice-craft { width:40px; height:40px; min-width:40px; font-size:28px; }
+    .sticky-notice-overflow-stack .sticky-notice-paper { padding:7px 39px 7px 9px; font-size:11.5px; line-height:1.3; }
+  }
+</style>
 </head>
 <body>
   <div class="sparkle-sky" aria-hidden="true"><span>✦</span><span>✧</span><span>✦</span><span>✧</span><span>✦</span><span>✧</span><span>✦</span><span>✧</span><span>✦</span><span>⋆</span><span>✦</span><span>·</span><span>✧</span><span>⋆</span></div>
@@ -1856,7 +1892,7 @@ body::before {
       </div>
     </section>
 
-
+    <div id="stickyNoticeOverflowStack" class="sticky-notice-overflow-stack" aria-live="polite"></div>
 
     <section class="card full mini-notice-card">
       <div class="mini-notice-row">
@@ -2030,14 +2066,38 @@ body::before {
         </div>
       </section>
 
-      <section class="card full">
-        <h2>💌 문의</h2>
-        <div class="lead-source-grid">
-          <div><label>Instagram 일반 문의</label><input id="inq_ig" type="number" value="0" oninput="updateAll()"></div>
-          <div><label>WhatsApp 일반 문의</label><input id="inq_wa" type="number" value="0" oninput="updateAll()"></div>
-          <div><label>TikTok 일반 문의</label><input id="inq_tt" type="number" value="0" oninput="updateAll()"></div>
-          <div><label>Email 일반 문의</label><input id="inq_email" type="number" value="0" oninput="updateAll()"></div>
-          <div><label>Messenger 문의</label><input id="inq_msg" type="number" value="0" oninput="updateAll()"></div>
+      <section class="card full inquiry-report-card">
+        <h2>💌 문의 · 보고문 입력</h2>
+        <div class="hint">오픈/마감 보고의 문의 숫자와 플랫폼별 세부내역에 자동 반영돼요.</div>
+        <div class="inquiry-section-grid">
+          <div class="inquiry-subcard inquiry-main-box">
+            <h3>● 문의</h3>
+            <div class="lead-source-grid inquiry-input-grid">
+              <div><label>WhatsApp 일반 문의</label><input id="inq_wa" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>강남언니 문의</label><input id="inq_gn" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>Instagram 본계정 문의</label><input id="inq_ig_main" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>Instagram 글로벌 문의</label><input id="inq_ig_global" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>TikTok 영어문의</label><input id="inq_tt_en" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>Facebook Messenger 문의</label><input id="inq_msg" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>Email 일반 문의</label><input id="inq_email" type="number" value="0" oninput="updateAll()"></div>
+            </div>
+            <input id="inq_ig" type="hidden" value="0">
+            <input id="inq_tt" type="hidden" value="0">
+          </div>
+
+          <div class="inquiry-subcard inquiry-extra-box">
+            <h3>● 문의 외</h3>
+            <div class="lead-source-grid inquiry-input-grid">
+              <div><label>WhatsApp 내원확인</label><input id="out_wa_visit" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>WhatsApp VIP FU</label><input id="out_wa_vip" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>Instagram 본계정 베타</label><input id="out_ig_beta" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>Instagram 글로벌</label><input id="out_ig_global" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>TikTok 문의 외</label><input id="out_tt" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>업체</label><input id="out_agency" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>구글리뷰</label><input id="google_review_count" type="number" value="0" oninput="updateAll()"></div>
+              <div><label>부정리뷰</label><input id="google_review_negative" type="number" value="0" oninput="updateAll()"></div>
+            </div>
+          </div>
         </div>
       </section>
     
@@ -2046,13 +2106,13 @@ body::before {
     <div class="preview-wrap">
       <section class="card full" style="margin-bottom:18px;">
         <h2>🧾 보고문 작업</h2>
-        <div class="actions">
-          <button id="showReportButton" onclick="showReportPreview()">보고문 보기</button>
-          <button onclick="copyReport()">텍스트 복사</button>
-          <button onclick="exportPNG()">PNG 저장</button>
-          <button onclick="exportPDF()">PDF 저장</button>
+        <div class="actions report-action-buttons">
+          <button id="showReportButton" class="closing-report-button" onclick="showReportPreview()">마감보고문 보기</button>
+          <button class="closing-report-button" onclick="copyReport()">마감 보고문 텍스트 복사</button>
+          <button class="open-report-button" onclick="showOpenReportPreview()">오픈보고문 보기</button>
+          <button class="open-report-button" onclick="copyOpenReport()">오픈 보고문 텍스트 복사</button>
         </div>
-        <div class="hint">보고문은 버튼을 눌렀을 때만 확인할 수 있어요. 복사/저장/export 기능은 그대로 작동합니다.</div>
+        <div class="hint">마감보고문과 오픈보고문을 각각 미리보기/복사할 수 있어요. 입력 내용은 기존처럼 Firebase에 저장됩니다.</div>
       </section>
       <div id="reportPreview" class="preview-hidden"></div>
 
@@ -2268,7 +2328,7 @@ function toggleSoundMute(){
 }
 loadSoundSettings();
 
-const inputIds = ['reportDate','reportTime','reporter','cancelReason','notes','pinnedNotice','home_res','wix_res','home_same','home_cancel','home_change','walkin_count','wa_res','wa_same','wa_cancel','ig_res','ig_same','ig_beta','ig_cancel','fb_res','fb_cancel','tt_res','tt_beta','tt_cancel','email_same','email_res','email_cancel','inq_ig','inq_wa','inq_tt','inq_email','inq_msg'];
+const inputIds = ['reportDate','reportTime','reporter','cancelReason','notes','pinnedNotice','home_res','wix_res','home_same','home_cancel','home_change','walkin_count','wa_res','wa_same','wa_cancel','ig_res','ig_same','ig_beta','ig_cancel','fb_res','fb_cancel','tt_res','tt_beta','tt_cancel','email_same','email_res','email_cancel','inq_ig','inq_wa','inq_tt','inq_email','inq_msg','inq_gn','inq_ig_main','inq_ig_global','inq_tt_en','out_wa_visit','out_wa_vip','out_ig_beta','out_ig_global','out_tt','out_agency','google_review_count','google_review_negative'];
 let staff = [];
 const reservationCounterIds = new Set(['home_res','wix_res','wa_res','ig_res','ig_beta','fb_res','tt_res','tt_beta','email_res', ...agencyNames.map((_,i)=>`agency_${i}`)]);
 const sameDayCounterIds = new Set(['home_same','wa_same','ig_same','email_same']);
@@ -2432,6 +2492,8 @@ function showReportPreview(){
   if(!validateSourceRoutes()) return;
   updatePreview();
   const modal = document.getElementById('reportModal');
+  const modalTitle = modal?.querySelector('.report-modal-head h2');
+  if(modalTitle) modalTitle.textContent = '🌙 마감보고문 미리보기';
   const body = document.getElementById('reportModalBody');
   const preview = document.getElementById('reportPreview');
   if(!modal || !body || !preview) return;
@@ -3218,6 +3280,54 @@ function staffLineHtml(){
   return rows || '<li>-</li>';
 }
 
+function syncInquiryDerivedTotals(){
+  const igTotal = n('inq_ig_main') + n('inq_ig_global');
+  const ttTotal = n('inq_tt_en');
+  const igLegacy = document.getElementById('inq_ig');
+  const ttLegacy = document.getElementById('inq_tt');
+  if(igLegacy) igLegacy.value = igTotal;
+  if(ttLegacy) ttLegacy.value = ttTotal;
+}
+function formatOpenReportDate(dateStr){
+  if(!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  const days = ['일','월','화','수','목','금','토'];
+  return `${d.getMonth()+1}/${d.getDate()}(${days[d.getDay()]})`;
+}
+function openingInquiryTotals(){
+  const igMain=n('inq_ig_main'), igGlobal=n('inq_ig_global'), ttEnglish=n('inq_tt_en');
+  const total=n('inq_wa')+n('inq_gn')+igMain+igGlobal+ttEnglish+n('inq_msg')+n('inq_email');
+  return {total, igMain, igGlobal, igTotal:igMain+igGlobal, ttEnglish};
+}
+function openingOutsideTotals(){
+  const waVisit=n('out_wa_visit'), waVip=n('out_wa_vip');
+  const igBeta=n('out_ig_beta'), igGlobal=n('out_ig_global');
+  const tt=n('out_tt'), agency=n('out_agency');
+  return {
+    total:waVisit+waVip+igBeta+igGlobal+tt+agency,
+    waVisit, waVip, waTotal:waVisit+waVip,
+    igBeta, igGlobal, igTotal:igBeta+igGlobal, tt, agency
+  };
+}
+function openingStaffText(){
+  normalizeStaff();
+  const rows=staff.filter(s=>s.name || s.start || s.end || s.place || s.note).map(s=>staffTimeText(s));
+  return rows.length ? rows.join('\n') : '-';
+}
+function openReportText(){
+  syncInquiryDerivedTotals();
+  const dateKey=text('reportDate') || todayKoreaDateString();
+  const dateLabel=formatOpenReportDate(dateKey);
+  const q=openingInquiryTotals();
+  const x=openingOutsideTotals();
+  const reviewDate=formatShortDate(dateKey);
+  const emailLine=n('inq_email')>0 ? `\n이메일 ${n('inq_email')}` : '';
+  return `${dateLabel} 영어CS 오픈 보고\n\n● 문의 ${q.total}\n와츠앱 ${n('inq_wa')}\n강남언니 ${n('inq_gn')}\n인스타 ${q.igTotal} (본계정 ${q.igMain} / 글로벌 ${q.igGlobal} )\n틱톡 ${q.ttEnglish} (영어문의 ${q.ttEnglish})\n페이스북 메세지 ${n('inq_msg')}${emailLine}\n\n● 문의 외 ${x.total}\n내원확인 + VIP FU + 베타 + 업체\n와츠앱 ${x.waTotal} (내원확인 ${x.waVisit} / VIP FU ${x.waVip})\n인스타 ${x.igTotal} (본계정 베타 ${x.igBeta} / 글로벌 ${x.igGlobal} )\n틱톡 ${x.tt}\n업체 ${x.agency}\n구글리뷰 ${n('google_review_count')}개 (${reviewDate} 일자 리뷰-부정리뷰 ${n('google_review_negative')}개)\n\n● 근무인원\n${openingStaffText()}`;
+}
+function openReportHtml(){
+  return `<h3>${escapeHtml(formatOpenReportDate(text('reportDate') || todayKoreaDateString()))} 영어CS 오픈 보고</h3><div style="white-space:pre-wrap; line-height:1.7;">${escapeHtml(openReportText())}</div>`;
+}
+
 function totals(){
   const reservations = n('home_res') + n('wix_res') + n('wa_res') + n('wa_same') + n('ig_res') + n('ig_same') + n('ig_beta') + n('fb_res') + n('tt_res') + n('tt_beta') + n('email_res') + n('email_same') + agencyNames.reduce((a,_,i)=>a+n(`agency_${i}`),0);
   const sameDay = n('home_same') + n('wa_same') + n('ig_same') + n('email_same');
@@ -3383,7 +3493,7 @@ function updatePreview(){
   `;
 }
 
-function updateAll(){ updatePinnedNoticeDisplay(); updatePreview(); updateSourceSummary(); updateGameDashboard(); checkGameVoices(); updateStaffGate(); if(!suppressLocalSave){ saveData(false); if(window.forenaScheduleFirebaseSave) window.forenaScheduleFirebaseSave(); } }
+function updateAll(){ syncInquiryDerivedTotals(); updatePinnedNoticeDisplay(); updatePreview(); updateSourceSummary(); updateGameDashboard(); checkGameVoices(); updateStaffGate(); if(!suppressLocalSave){ saveData(false); if(window.forenaScheduleFirebaseSave) window.forenaScheduleFirebaseSave(); } }
 function collectData(){
   normalizeStaff();
   const data = { staff, checklist: collectChecklist(), dynamic:{}, shift: currentShiftType || 'weekday', blockedTimes: Array.isArray(blockedTimes) ? blockedTimes : [] };
@@ -3399,6 +3509,11 @@ function applyData(data){
     const el = document.getElementById(id);
     if(el && data[id] !== undefined) el.value = data[id];
   });
+  // Backward compatibility: old Firebase records used only inq_ig / inq_tt totals.
+  if(data.inq_ig_main === undefined && data.inq_ig !== undefined){ const el=document.getElementById('inq_ig_main'); if(el) el.value=data.inq_ig; }
+  if(data.inq_ig_global === undefined){ const el=document.getElementById('inq_ig_global'); if(el) el.value=0; }
+  if(data.inq_tt_en === undefined && data.inq_tt !== undefined){ const el=document.getElementById('inq_tt_en'); if(el) el.value=data.inq_tt; }
+  syncInquiryDerivedTotals();
   currentShiftType = data.shift === 'weekend' ? 'weekend' : 'weekday';
   staff = Array.isArray(data.staff) ? data.staff : [];
   blockedTimes = Array.isArray(data.blockedTimes) ? data.blockedTimes : [];
@@ -3441,7 +3556,25 @@ async function resetAll(){
 async function copyReport(){
   if(!validateSourceRoutes()) return;
   await navigator.clipboard.writeText(reportText());
-  toast('보고문을 복사했어요');
+  toast('마감 보고문을 복사했어요');
+}
+function showOpenReportPreview(){
+  syncInquiryDerivedTotals();
+  const modal=document.getElementById('reportModal');
+  const body=document.getElementById('reportModalBody');
+  const preview=document.getElementById('reportPreview');
+  if(!modal || !body || !preview) return;
+  preview.innerHTML=openReportHtml();
+  preview.classList.remove('preview-hidden');
+  body.appendChild(preview);
+  const title=modal.querySelector('.report-modal-head h2');
+  if(title) title.textContent='🌅 오픈보고문 미리보기';
+  modal.classList.add('show');
+}
+async function copyOpenReport(){
+  syncInquiryDerivedTotals();
+  await navigator.clipboard.writeText(openReportText());
+  toast('오픈 보고문을 복사했어요');
 }
 function downloadTXT(){
   if(!validateSourceRoutes()) return;
@@ -4359,11 +4492,15 @@ let allowSaveBeforeInitialSnapshot = false;
   }
   function renderPinnedNotices(options={}){
     const stack=document.getElementById('stickyNoticeStack');
+    const overflowStack=document.getElementById('stickyNoticeOverflowStack');
     if(!stack) return;
-    stack.innerHTML=pinnedNotices.map((item,index)=>`<div class="sticky-notice-ufo show" data-notice-id="${escapeHtml(item.id)}" style="transition-delay:${index*55}ms">
+    const noticeMarkup=(item,index)=>`<div class="sticky-notice-ufo show" data-notice-id="${escapeHtml(item.id)}" style="transition-delay:${index*55}ms">
       <div class="sticky-notice-craft" aria-hidden="true" title="${escapeHtml(item.creator||'작성자')}">${escapeHtml(mascotForCreator(item.creator,item.mascot))}</div>
       <div class="sticky-notice-paper"><span class="sticky-notice-title">NOTICE ${index+1}${item.creator ? ' · '+escapeHtml(item.creator) : ''}</span><span>${escapeHtml(item.text)}</span>
-      <button type="button" class="sticky-notice-close" onclick="dismissPinnedNoticeById('${item.id}')" aria-label="공지 완료 및 닫기" title="완료했어요">×</button></div></div>`).join('');
+      <button type="button" class="sticky-notice-close" onclick="dismissPinnedNoticeById('${item.id}')" aria-label="공지 완료 및 닫기" title="완료했어요">×</button></div></div>`;
+    // Keep only NOTICE 1-2 in the top floating area. NOTICE 3+ starts again below Today's Tasks.
+    stack.innerHTML=pinnedNotices.slice(0,2).map((item,index)=>noticeMarkup(item,index)).join('');
+    if(overflowStack) overflowStack.innerHTML=pinnedNotices.slice(2).map((item,index)=>noticeMarkup(item,index+2)).join('');
     syncLegacyNotice(); refreshNoticeCreatorOptions();
     if(options.popup && pinnedNotices.length){
       const latest=pinnedNotices[pinnedNotices.length-1];
