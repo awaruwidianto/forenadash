@@ -3505,6 +3505,14 @@ function collectData(){
 }
 function applyData(data){
   if(!data) return;
+
+  // IMPORTANT: Firebase echoes our own save back through onValue().
+  // Rebuilding #staffTable while somebody is typing destroys the focused input,
+  // which is especially noticeable when switching Korean/English IME or deleting text.
+  // Keep the live local staff row untouched while a staff field has focus.
+  const activeEl = document.activeElement;
+  const isEditingStaff = !!(activeEl && activeEl.closest && activeEl.closest('.staff-row'));
+
   [...inputIds, ...sourceNames.map((_,i)=>`src_${i}`), ...agencyNames.map((_,i)=>`agency_${i}`)].forEach(id=>{
     const el = document.getElementById(id);
     if(el && data[id] !== undefined) el.value = data[id];
@@ -3515,10 +3523,17 @@ function applyData(data){
   if(data.inq_tt_en === undefined && data.inq_tt !== undefined){ const el=document.getElementById('inq_tt_en'); if(el) el.value=data.inq_tt; }
   syncInquiryDerivedTotals();
   currentShiftType = data.shift === 'weekend' ? 'weekend' : 'weekday';
-  staff = Array.isArray(data.staff) ? data.staff : [];
+
+  // Only replace/re-render staff when the user is NOT actively editing a staff field.
+  // The current staff[] object is already updated on every local keystroke, so skipping
+  // the Firebase echo here prevents focus/caret loss without losing the typed value.
+  if(!isEditingStaff){
+    staff = Array.isArray(data.staff) ? data.staff : [];
+  }
+
   blockedTimes = Array.isArray(data.blockedTimes) ? data.blockedTimes : [];
   document.querySelectorAll('.pill').forEach(p=>p.classList.toggle('active', p.dataset.shift === currentShiftType));
-  renderStaff();
+  if(!isEditingStaff) renderStaff();
   renderBlockedTimeButtons();
   updateBreakModeHint();
   applyChecklist(data.checklist);
@@ -3526,7 +3541,7 @@ function applyData(data){
   updatePreview();
   updateSourceSummary();
   updateGameDashboard();
-  restoreStaffSupportTimers();
+  if(!isEditingStaff) restoreStaffSupportTimers();
 }
 function saveData(show=true){ localStorage.setItem(storageKey(), JSON.stringify(collectData())); if(show) toast('저장 완료'); }
 function loadData(){
