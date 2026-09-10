@@ -905,6 +905,56 @@
       cursor: pointer;
     }
     .top-checklist input { width: auto; accent-color: var(--pink-dark); }
+    .top-checklist-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 11px;
+    }
+    .top-checklist-head h2 { margin-bottom: 0; }
+    .checklist-manager {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(255,255,255,.78);
+    }
+    .checklist-manager-title {
+      margin-bottom: 9px;
+      color: var(--rose);
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .checklist-manager-list { display: grid; gap: 8px; }
+    .checklist-manager-row {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto auto;
+      gap: 7px;
+      align-items: center;
+      padding: 8px 9px;
+      border: 1px solid #f6d2df;
+      border-radius: 13px;
+      background: #fff8fb;
+    }
+    .checklist-manager-name {
+      min-width: 0;
+      color: var(--ink);
+      font-size: 12.5px;
+      font-weight: 850;
+      overflow-wrap: anywhere;
+    }
+    .top-checklist-empty, .checklist-manager-empty {
+      grid-column: 1 / -1;
+      padding: 11px 12px;
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      background: #fff8fb;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+    }
     .staff-required-disabled { opacity: .45; pointer-events: none; }
     #reportPreview.pdf-one-page {
       width: 1120px;
@@ -1882,13 +1932,20 @@ body::before {
     </div>
 
     <section class="card full top-checklist-card">
-      <h2>✅ 오늘 업무</h2>
+      <div class="top-checklist-head">
+        <h2>✅ 오늘 업무</h2>
+        <button type="button" class="secondary small" id="checklistManageButton" onclick="toggleChecklistManager()">⚙️ 업무 관리</button>
+      </div>
       <div class="top-checklist" id="topChecklist">
         <label><input type="checkbox" data-check="next_wix"> 다음날 윅스 예약</label>
         <label><input type="checkbox" data-check="next_visit"> 다음날 내원확인</label>
         <label><input type="checkbox" data-check="vip_follow"> VIP 후속 연락</label>
         <label><input type="checkbox" data-check="google_review"> 구글리뷰 답글</label>
         <label><input type="checkbox" data-check="email_check"> 이메일 확인</label>
+      </div>
+      <div class="checklist-manager" id="checklistManager" hidden>
+        <div class="checklist-manager-title">업무 이름 변경 / 삭제</div>
+        <div class="checklist-manager-list" id="checklistManagerList"></div>
       </div>
     </section>
 
@@ -2203,7 +2260,33 @@ document.addEventListener('DOMContentLoaded', initDashboardPasswordGate);
 <script>
 const sourceNames = ['인스타','틱톡','구글','소개','유튜브','챗지피티','온라인','샤오홍슈','쓰레드','페이스북','재진','네이버','여신','레딧'];
 const agencyNames = ['프리큐티','MD','크리에이트립','ROAM','부키메드','강남언니','클룩'];
-const checklistIds = ['next_wix','next_visit','vip_follow','google_review','email_check'];
+const DEFAULT_CHECKLIST_ITEMS = [
+  {id:'next_wix', label:'다음날 윅스 예약'},
+  {id:'next_visit', label:'다음날 내원확인'},
+  {id:'vip_follow', label:'VIP 후속 연락'},
+  {id:'google_review', label:'구글리뷰 답글'},
+  {id:'email_check', label:'이메일 확인'}
+];
+const CHECKLIST_ITEMS_STORAGE_KEY = 'forenaChecklistItems_v1';
+function sanitizeChecklistItems(items){
+  if(!Array.isArray(items)) return [];
+  const seen = new Set();
+  return items.map(item => ({
+    id: String(item?.id || '').trim(),
+    label: String(item?.label || '').trim()
+  })).filter(item => /^[A-Za-z0-9_-]+$/.test(item.id) && item.label && !seen.has(item.id) && seen.add(item.id));
+}
+function loadChecklistItemsConfig(){
+  try {
+    const raw = localStorage.getItem(CHECKLIST_ITEMS_STORAGE_KEY);
+    if(raw !== null) return sanitizeChecklistItems(JSON.parse(raw));
+  } catch(e) {}
+  return DEFAULT_CHECKLIST_ITEMS.map(item => ({...item}));
+}
+function saveChecklistItemsConfig(){
+  try { localStorage.setItem(CHECKLIST_ITEMS_STORAGE_KEY, JSON.stringify(checklistItems)); } catch(e) {}
+}
+let checklistItems = loadChecklistItemsConfig();
 
 const SOUND_SETTINGS_KEY = 'forenaSoundSettings';
 let soundMuted = false;
@@ -2913,17 +2996,80 @@ function updateStaffGate(){
 }
 function collectChecklist(){
   const out = {};
-  checklistIds.forEach(id => { out[id] = !!document.querySelector(`[data-check="${id}"]`)?.checked; });
+  checklistItems.forEach(item => { out[item.id] = !!document.querySelector(`[data-check="${item.id}"]`)?.checked; });
   return out;
 }
+function renderChecklist(checkedState=null){
+  const box = document.getElementById('topChecklist');
+  if(!box) return;
+  const state = checkedState || collectChecklist();
+  if(!checklistItems.length){
+    box.innerHTML = '<div class="top-checklist-empty">등록된 오늘 업무가 없어요.</div>';
+    return;
+  }
+  box.innerHTML = checklistItems.map(item =>
+    `<label><input type="checkbox" data-check="${item.id}"${state[item.id] ? ' checked' : ''}> ${escapeHtml(item.label)}</label>`
+  ).join('');
+}
+function renderChecklistManager(){
+  const list = document.getElementById('checklistManagerList');
+  if(!list) return;
+  if(!checklistItems.length){
+    list.innerHTML = '<div class="checklist-manager-empty">삭제할 업무가 없어요.</div>';
+    return;
+  }
+  list.innerHTML = checklistItems.map(item => `
+    <div class="checklist-manager-row">
+      <div class="checklist-manager-name">${escapeHtml(item.label)}</div>
+      <button type="button" class="secondary small" onclick="renameChecklistItem('${item.id}')">변경</button>
+      <button type="button" class="danger small" onclick="deleteChecklistItem('${item.id}')">삭제</button>
+    </div>`).join('');
+}
+function toggleChecklistManager(){
+  const panel = document.getElementById('checklistManager');
+  const button = document.getElementById('checklistManageButton');
+  if(!panel) return;
+  panel.hidden = !panel.hidden;
+  if(!panel.hidden) renderChecklistManager();
+  if(button) button.textContent = panel.hidden ? '⚙️ 업무 관리' : '✕ 관리 닫기';
+}
+function renameChecklistItem(id){
+  const item = checklistItems.find(entry => entry.id === id);
+  if(!item) return;
+  const next = window.prompt('업무 이름을 변경해주세요.', item.label);
+  if(next === null) return;
+  const label = next.trim();
+  if(!label){ toast('업무 이름을 입력해주세요'); return; }
+  const state = collectChecklist();
+  item.label = label;
+  saveChecklistItemsConfig();
+  renderChecklist(state);
+  renderChecklistManager();
+  updateAll();
+  toast('업무 이름을 변경했어요');
+}
+function deleteChecklistItem(id){
+  const item = checklistItems.find(entry => entry.id === id);
+  if(!item) return;
+  if(!window.confirm(`Are you sure?\n"${item.label}" 업무를 삭제할까요?`)) return;
+  const state = collectChecklist();
+  checklistItems = checklistItems.filter(entry => entry.id !== id);
+  delete state[id];
+  saveChecklistItemsConfig();
+  renderChecklist(state);
+  renderChecklistManager();
+  updateAll();
+  toast('업무를 삭제했어요');
+}
 function applyChecklist(data){
-  checklistIds.forEach(id => {
-    const el = document.querySelector(`[data-check="${id}"]`);
-    if(el) el.checked = !!(data && data[id]);
+  checklistItems.forEach(item => {
+    const el = document.querySelector(`[data-check="${item.id}"]`);
+    if(el) el.checked = !!(data && data[item.id]);
   });
 }
 function checkChecklistCongrats(){
-  const allDone = checklistIds.every(id => document.querySelector(`[data-check="${id}"]`)?.checked);
+  const ids = checklistItems.map(item => item.id);
+  const allDone = ids.length > 0 && ids.every(id => document.querySelector(`[data-check="${id}"]`)?.checked);
   const key = `forenaChecklistCongrats_${todayKoreaDateString()}`;
   if(allDone && !localStorage.getItem(key)){
     localStorage.setItem(key, 'shown');
@@ -3496,7 +3642,7 @@ function updatePreview(){
 function updateAll(){ syncInquiryDerivedTotals(); updatePinnedNoticeDisplay(); updatePreview(); updateSourceSummary(); updateGameDashboard(); checkGameVoices(); updateStaffGate(); if(!suppressLocalSave){ saveData(false); if(window.forenaScheduleFirebaseSave) window.forenaScheduleFirebaseSave(); } }
 function collectData(){
   normalizeStaff();
-  const data = { staff, checklist: collectChecklist(), dynamic:{}, shift: currentShiftType || 'weekday', blockedTimes: Array.isArray(blockedTimes) ? blockedTimes : [] };
+  const data = { staff, checklist: collectChecklist(), checklistItems: checklistItems.map(item => ({...item})), dynamic:{}, shift: currentShiftType || 'weekday', blockedTimes: Array.isArray(blockedTimes) ? blockedTimes : [] };
   [...inputIds, ...sourceNames.map((_,i)=>`src_${i}`), ...agencyNames.map((_,i)=>`agency_${i}`)].forEach(id=>{
     const el = document.getElementById(id);
     if(el) data[id] = el.value;
@@ -3532,6 +3678,12 @@ function applyData(data){
   }
 
   blockedTimes = Array.isArray(data.blockedTimes) ? data.blockedTimes : [];
+  if(Array.isArray(data.checklistItems)){
+    checklistItems = sanitizeChecklistItems(data.checklistItems);
+    saveChecklistItemsConfig();
+  }
+  renderChecklist(data.checklist || {});
+  renderChecklistManager();
   document.querySelectorAll('.pill').forEach(p=>p.classList.toggle('active', p.dataset.shift === currentShiftType));
   if(!isEditingStaff) renderStaff();
   renderBlockedTimeButtons();
@@ -3759,6 +3911,8 @@ function scheduleHourlyPastelBackground(){
 applyHourlyPastelBackground();
 scheduleHourlyPastelBackground();
 buildDynamicFields();
+renderChecklist();
+renderChecklistManager();
 renderBlockedTimeButtons();
 updatePinnedNoticeDisplay({popup:false});
 updateSoundControls();
