@@ -920,8 +920,16 @@
       border-radius: 16px;
       background: rgba(255,255,255,.78);
     }
-    .checklist-manager-title {
+    .checklist-manager-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 9px;
       margin-bottom: 9px;
+      flex-wrap: wrap;
+    }
+    .checklist-manager-title {
+      margin-bottom: 0;
       color: var(--rose);
       font-size: 12px;
       font-weight: 900;
@@ -1944,7 +1952,10 @@ body::before {
         <label><input type="checkbox" data-check="email_check"> 이메일 확인</label>
       </div>
       <div class="checklist-manager" id="checklistManager" hidden>
-        <div class="checklist-manager-title">업무 이름 변경 / 삭제</div>
+        <div class="checklist-manager-head">
+          <div class="checklist-manager-title">업무 추가 / 이름 변경 / 삭제</div>
+          <button type="button" class="secondary small" onclick="addChecklistItem()">+ 새 업무 추가</button>
+        </div>
         <div class="checklist-manager-list" id="checklistManagerList"></div>
       </div>
     </section>
@@ -1961,6 +1972,12 @@ body::before {
         </div>
         <input id="pinnedNotice" type="hidden" value="" />
       </div>
+      <div class="notice-schedule-row">
+        <div class="notice-schedule-label">⏰ 예약 표시</div>
+        <input id="pinnedNoticeSchedule" type="datetime-local" aria-label="공지 예약 날짜와 시간" />
+        <div class="hint-inline">비워두면 즉시 표시 · 예약하면 선택한 한국 시간에 알림과 함께 표시돼요.</div>
+      </div>
+      <div id="scheduledNoticeQueue" class="scheduled-notice-queue" aria-live="polite"></div>
     </section>
     <div id="stickyNoticeStack" class="sticky-notice-stack" aria-live="polite"></div>
 
@@ -2520,7 +2537,18 @@ function koreaNow(){
 }
 
 function todayKoreaDateString(){
-  return koreaNow().toISOString().slice(0,10);
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(new Date());
+    const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    return `${map.year}-${map.month}-${map.day}`;
+  } catch(e) {
+    return new Date(Date.now() + 9 * 3600000).toISOString().slice(0,10);
+  }
 }
 
 function updateTodayDateDisplay(){
@@ -3033,6 +3061,24 @@ function toggleChecklistManager(){
   if(!panel.hidden) renderChecklistManager();
   if(button) button.textContent = panel.hidden ? '⚙️ 업무 관리' : '✕ 관리 닫기';
 }
+function addChecklistItem(){
+  const next = window.prompt('새 오늘 업무 이름을 입력해주세요.');
+  if(next === null) return;
+  const label = next.trim();
+  if(!label){ toast('업무 이름을 입력해주세요'); return; }
+  const state = collectChecklist();
+  let id = '';
+  do {
+    id = `custom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`;
+  } while(checklistItems.some(entry => entry.id === id));
+  checklistItems.push({id, label});
+  state[id] = false;
+  saveChecklistItemsConfig();
+  renderChecklist(state);
+  renderChecklistManager();
+  updateAll();
+  toast('새 오늘 업무를 추가했어요');
+}
 function renameChecklistItem(id){
   const item = checklistItems.find(entry => entry.id === id);
   if(!item) return;
@@ -3490,8 +3536,10 @@ function formatHistoryDate(dateKey){
   return `${Number(parts[1])}/${Number(parts[2])}`;
 }
 function previousDateKey(dateKey){
-  const d = new Date(dateKey + 'T00:00:00');
-  d.setDate(d.getDate() - 1);
+  const [year, month, day] = String(dateKey || '').split('-').map(Number);
+  if(!year || !month || !day) return dateKey;
+  const d = new Date(Date.UTC(year, month - 1, day));
+  d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0,10);
 }
 function currentMonthPrefix(){
@@ -3841,6 +3889,58 @@ function clearFormForNewKoreaDate(){
   applyChecklist({});
 }
 let lastManualReportDate = '';
+let lastObservedKoreaDate = todayKoreaDateString();
+let koreaMidnightTimer = null;
+
+function millisecondsUntilNextKoreaMidnight(){
+  const nowMs = Date.now();
+  const shifted = new Date(nowMs + 9 * 3600000);
+  const nextMidnightAsShiftedUtc = Date.UTC(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth(),
+    shifted.getUTCDate() + 1,
+    0, 0, 0, 0
+  );
+  const nextKoreaMidnightMs = nextMidnightAsShiftedUtc - 9 * 3600000;
+  return Math.max(250, nextKoreaMidnightMs - nowMs);
+}
+
+async function maybeAutoRolloverKoreaDate(){
+  const today = todayKoreaDateString();
+  updateTodayDateDisplay();
+  if(today === lastObservedKoreaDate) return;
+
+  const previousToday = lastObservedKoreaDate;
+  lastObservedKoreaDate = today;
+
+  const reportDateEl = document.getElementById('reportDate');
+  if(!reportDateEl) return;
+
+  // Respect a deliberately selected historical/future report date.
+  const selectedDate = reportDateEl.value || previousToday;
+  if(selectedDate !== previousToday) return;
+
+  suppressLocalSave = true;
+  reportDateEl.value = today;
+  clearFormForNewKoreaDate();
+  await autoSetShiftForKoreaDate();
+  loadData();
+  resetReminderStateForToday();
+  updateAll();
+  suppressLocalSave = false;
+  lastManualReportDate = today;
+
+  if(window.forenaAttachRealtimeListener) window.forenaAttachRealtimeListener(true);
+  toast(`${today} 새 날짜 데이터로 자동 전환됐어요`);
+}
+
+function scheduleKoreaMidnightRollover(){
+  if(koreaMidnightTimer) clearTimeout(koreaMidnightTimer);
+  koreaMidnightTimer = setTimeout(async () => {
+    await maybeAutoRolloverKoreaDate();
+    scheduleKoreaMidnightRollover();
+  }, millisecondsUntilNextKoreaMidnight() + 150);
+}
 
 async function loadSelectedReportDate(showToast=false){
   suppressLocalSave = true;
@@ -3925,6 +4025,12 @@ setInterval(maybeRunTimedReminders, 60000);
 setInterval(maybeRunStaffLeaveAlerts, 60000);
 maybeRunTimedReminders();
 maybeRunStaffLeaveAlerts();
+scheduleKoreaMidnightRollover();
+setInterval(maybeAutoRolloverKoreaDate, 60000);
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden) maybeAutoRolloverKoreaDate();
+});
+window.addEventListener('focus', maybeAutoRolloverKoreaDate);
 
 document.getElementById('reportDate')?.addEventListener('change', handleManualReportDateChange);
 </script>
@@ -3990,10 +4096,21 @@ let allowSaveBeforeInitialSnapshot = false;
   }
 
   function koreaDateKey() {
-    const now = new Date();
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    const korea = new Date(utc + 9 * 3600000);
-    return korea.toISOString().slice(0, 10);
+    if (typeof window.todayKoreaDateString === "function") {
+      return window.todayKoreaDateString();
+    }
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).formatToParts(new Date());
+      const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
+      return `${map.year}-${map.month}-${map.day}`;
+    } catch (e) {
+      return new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+    }
   }
 
   function currentReportDateKey() {
@@ -4448,6 +4565,48 @@ let allowSaveBeforeInitialSnapshot = false;
     caret-color: var(--hour-accent-strong, #d85f8a);
   }
   .notice-actions { display:flex; gap:7px; white-space:nowrap; }
+  .notice-schedule-row {
+    display:grid;
+    grid-template-columns:auto minmax(220px,300px) minmax(0,1fr);
+    gap:9px;
+    align-items:center;
+    margin-top:10px;
+    padding-top:10px;
+    border-top:1px dashed color-mix(in srgb, var(--hour-accent, #ff9fc9) 38%, white);
+  }
+  .notice-schedule-label {
+    color:color-mix(in srgb, var(--hour-accent-strong, #d85f8a) 82%, #452a58);
+    font-size:12px;
+    font-weight:950;
+    white-space:nowrap;
+  }
+  #pinnedNoticeSchedule { min-height:38px; height:38px; padding:7px 10px; font-weight:800; }
+  .scheduled-notice-queue { display:grid; gap:7px; margin-top:9px; }
+  .scheduled-notice-queue:empty { display:none; }
+  .scheduled-notice-item {
+    display:grid;
+    grid-template-columns:auto minmax(0,1fr) auto;
+    gap:8px;
+    align-items:center;
+    padding:8px 10px;
+    border-radius:14px;
+    border:1px solid color-mix(in srgb, var(--hour-secondary, #a9dcff) 55%, white);
+    background:linear-gradient(135deg, rgba(255,255,255,.94), color-mix(in srgb, var(--hour-accent-soft, #ffe7f2) 55%, white));
+    color:#352842;
+    font-size:11.5px;
+    font-weight:800;
+  }
+  .scheduled-notice-time {
+    padding:5px 8px;
+    border-radius:999px;
+    background:rgba(255,255,255,.92);
+    color:var(--hour-accent-strong, #d85f8a);
+    font-size:11px;
+    font-weight:950;
+    white-space:nowrap;
+  }
+  .scheduled-notice-text { min-width:0; overflow-wrap:anywhere; }
+  .scheduled-notice-cancel { min-height:30px !important; padding:5px 8px !important; font-size:10.5px !important; }
   .sticky-notice-ufo {
     position: fixed;
     top: 10px;
@@ -4533,7 +4692,11 @@ let allowSaveBeforeInitialSnapshot = false;
 
   @media(max-width:700px){
     .mini-notice-row { grid-template-columns: 1fr; }
-    .notice-actions { display:grid; grid-template-columns:1fr 1fr; }
+    .notice-actions { display:grid; grid-template-columns:1fr; }
+    .notice-schedule-row { grid-template-columns:minmax(0,1fr); align-items:stretch; }
+    .notice-schedule-label { white-space:normal; }
+    .scheduled-notice-item { grid-template-columns:minmax(0,1fr) auto; }
+    .scheduled-notice-time { grid-column:1 / -1; width:max-content; max-width:100%; }
     .mini-notice-input { font-size:16px !important; }
     .sticky-notice-ufo { top:6px; gap:5px; }
     .sticky-notice-craft { font-size:35px; }
@@ -4582,7 +4745,8 @@ let allowSaveBeforeInitialSnapshot = false;
     .top-checklist { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:6px !important; }
     .top-checklist label { min-width:0 !important; min-height:42px !important; padding:8px !important; }
     .mini-notice-row { grid-template-columns:minmax(0,1fr) !important; }
-    .notice-actions { grid-template-columns:1fr 1fr !important; }
+    .notice-actions { grid-template-columns:1fr !important; }
+    .notice-schedule-row { grid-template-columns:minmax(0,1fr) !important; }
     .staff-row { grid-template-columns:minmax(0,1fr) !important; }
     .counter { grid-template-columns:minmax(0,1fr) 34px 58px 34px !important; }
     input, textarea, select { max-width:100% !important; }
@@ -4601,9 +4765,11 @@ let allowSaveBeforeInitialSnapshot = false;
 (function(){
   let pinnedNotices = [];
   const GLOBAL_NOTICE_LOCAL_KEY = 'forenaGlobalPinnedNotices_v2';
+  const SCHEDULED_NOTICE_ALERTED_KEY = 'forenaScheduledNoticeAlerted_v1';
   const HEALTH_INTERVAL_MS = 30 * 60 * 1000;
   let healthTimer = null;
   let healthFlip = 0;
+  let scheduledNoticeTimer = null;
   const knownNoticeMascots = [
     {keys:['와루','waru','awaru'], emoji:'🦖'},
     {keys:['요셉','yosep','joseph'], emoji:'🐱'},
@@ -4620,6 +4786,45 @@ let allowSaveBeforeInitialSnapshot = false;
     const hit=knownNoticeMascots.find(item=>item.keys.some(k=>key.includes(k)));
     return hit ? hit.emoji : guestMascots[hashText(key || Date.now()) % guestMascots.length];
   }
+  function koreaScheduleValueToEpoch(value){
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    if(!match) return 0;
+    const [, y, mo, d, h, mi] = match.map(Number);
+    return Date.UTC(y, mo - 1, d, h - 9, mi, 0, 0);
+  }
+  function formatKoreaSchedule(epoch){
+    if(!epoch) return '';
+    try {
+      return new Intl.DateTimeFormat('ko-KR', {
+        timeZone:'Asia/Seoul',
+        year:'numeric', month:'2-digit', day:'2-digit',
+        hour:'2-digit', minute:'2-digit', hour12:false
+      }).format(new Date(epoch));
+    } catch(e) {
+      return new Date(epoch + 9 * 3600000).toISOString().slice(0,16).replace('T',' ');
+    }
+  }
+  function activePinnedNotices(){
+    const now = Date.now();
+    return pinnedNotices.filter(n => !Number(n.scheduledAt || 0) || Number(n.scheduledAt || 0) <= now);
+  }
+  function futurePinnedNotices(){
+    const now = Date.now();
+    return pinnedNotices
+      .filter(n => Number(n.scheduledAt || 0) > now)
+      .sort((a,b) => Number(a.scheduledAt || 0) - Number(b.scheduledAt || 0));
+  }
+  function loadAlertedNoticeIds(){
+    try {
+      const list = JSON.parse(localStorage.getItem(SCHEDULED_NOTICE_ALERTED_KEY) || '[]');
+      return new Set(Array.isArray(list) ? list.map(String) : []);
+    } catch(e) { return new Set(); }
+  }
+  function rememberAlertedNoticeId(id){
+    const ids = loadAlertedNoticeIds();
+    ids.add(String(id));
+    try { localStorage.setItem(SCHEDULED_NOTICE_ALERTED_KEY, JSON.stringify([...ids].slice(-250))); } catch(e) {}
+  }
   function saveNoticesLocal(){
     try { localStorage.setItem(GLOBAL_NOTICE_LOCAL_KEY, JSON.stringify(pinnedNotices)); } catch(e) {}
   }
@@ -4628,7 +4833,8 @@ let allowSaveBeforeInitialSnapshot = false;
       const saved=JSON.parse(localStorage.getItem(GLOBAL_NOTICE_LOCAL_KEY)||'null');
       if(Array.isArray(saved)) pinnedNotices=saved.filter(n=>n&&n.text).map(n=>({
         id:n.id||noticeId(), text:String(n.text), creator:String(n.creator||''),
-        mascot:mascotForCreator(n.creator,n.mascot), createdAt:Number(n.createdAt||Date.now())
+        mascot:mascotForCreator(n.creator,n.mascot), createdAt:Number(n.createdAt||Date.now()),
+        scheduledAt:Number(n.scheduledAt||0)
       }));
     } catch(e) {}
   }
@@ -4657,42 +4863,96 @@ let allowSaveBeforeInitialSnapshot = false;
   window.refreshNoticeCreatorOptions=refreshNoticeCreatorOptions;
   function syncLegacyNotice(){
     const legacy=document.getElementById('pinnedNotice');
-    if(legacy) legacy.value = pinnedNotices.length ? pinnedNotices[pinnedNotices.length-1].text : '';
+    const visible=activePinnedNotices();
+    if(legacy) legacy.value = visible.length ? visible[visible.length-1].text : '';
+  }
+  function renderScheduledNoticeQueue(){
+    const queue=document.getElementById('scheduledNoticeQueue');
+    if(!queue) return;
+    const future=futurePinnedNotices();
+    queue.innerHTML=future.map(item=>`
+      <div class="scheduled-notice-item" data-scheduled-notice-id="${escapeHtml(item.id)}">
+        <span class="scheduled-notice-time">⏰ ${escapeHtml(formatKoreaSchedule(item.scheduledAt))}</span>
+        <span class="scheduled-notice-text">${item.creator ? '<strong>'+escapeHtml(item.creator)+'</strong> · ' : ''}${escapeHtml(item.text)}</span>
+        <button type="button" class="secondary small scheduled-notice-cancel" onclick="cancelScheduledNoticeById('${item.id}')">예약 취소</button>
+      </div>`).join('');
+  }
+  function scheduleNextNoticeAlarm(){
+    if(scheduledNoticeTimer) clearTimeout(scheduledNoticeTimer);
+    scheduledNoticeTimer=null;
+    const future=futurePinnedNotices();
+    if(!future.length) return;
+    const wait=Math.max(250, Math.min(2147483000, Number(future[0].scheduledAt)-Date.now()+120));
+    scheduledNoticeTimer=setTimeout(checkScheduledNotices, wait);
   }
   function renderPinnedNotices(options={}){
     const stack=document.getElementById('stickyNoticeStack');
     const overflowStack=document.getElementById('stickyNoticeOverflowStack');
     if(!stack) return;
+    const visible=activePinnedNotices();
     const noticeMarkup=(item,index)=>`<div class="sticky-notice-ufo show" data-notice-id="${escapeHtml(item.id)}" style="transition-delay:${index*55}ms">
       <div class="sticky-notice-craft" aria-hidden="true" title="${escapeHtml(item.creator||'작성자')}">${escapeHtml(mascotForCreator(item.creator,item.mascot))}</div>
       <div class="sticky-notice-paper"><span class="sticky-notice-title">NOTICE ${index+1}${item.creator ? ' · '+escapeHtml(item.creator) : ''}</span><span>${escapeHtml(item.text)}</span>
       <button type="button" class="sticky-notice-close" onclick="dismissPinnedNoticeById('${item.id}')" aria-label="공지 완료 및 닫기" title="완료했어요">×</button></div></div>`;
-    // Keep only NOTICE 1-2 in the top floating area. NOTICE 3+ starts again below Today's Tasks.
-    stack.innerHTML=pinnedNotices.slice(0,2).map((item,index)=>noticeMarkup(item,index)).join('');
-    if(overflowStack) overflowStack.innerHTML=pinnedNotices.slice(2).map((item,index)=>noticeMarkup(item,index+2)).join('');
-    syncLegacyNotice(); refreshNoticeCreatorOptions();
-    if(options.popup && pinnedNotices.length){
-      const latest=pinnedNotices[pinnedNotices.length-1];
+    // Keep only active NOTICE 1-2 in the top floating area. Future scheduled notices stay hidden until due.
+    stack.innerHTML=visible.slice(0,2).map((item,index)=>noticeMarkup(item,index)).join('');
+    if(overflowStack) overflowStack.innerHTML=visible.slice(2).map((item,index)=>noticeMarkup(item,index+2)).join('');
+    renderScheduledNoticeQueue();
+    syncLegacyNotice();
+    refreshNoticeCreatorOptions();
+    scheduleNextNoticeAlarm();
+    if(options.popup && visible.length){
+      const latest=visible[visible.length-1];
       showSmartPopup(`📌 ${latest.creator ? latest.creator+'님의 ' : ''}새로운 공지`, latest.text);
     }
   }
   window.updatePinnedNoticeDisplay=function(options={}){ renderPinnedNotices(options); };
   window.forenaSetGlobalNotices=function(data){
     if(!Array.isArray(data)) return;
-    pinnedNotices=data.filter(n=>n&&n.text).map(n=>({id:n.id||noticeId(),text:String(n.text),creator:String(n.creator||''),mascot:mascotForCreator(n.creator,n.mascot),createdAt:Number(n.createdAt||Date.now())}));
-    saveNoticesLocal(); renderPinnedNotices({popup:false});
+    pinnedNotices=data.filter(n=>n&&n.text).map(n=>({
+      id:n.id||noticeId(),
+      text:String(n.text),
+      creator:String(n.creator||''),
+      mascot:mascotForCreator(n.creator,n.mascot),
+      createdAt:Number(n.createdAt||Date.now()),
+      scheduledAt:Number(n.scheduledAt||0)
+    }));
+    saveNoticesLocal();
+    renderPinnedNotices({popup:false});
+    checkScheduledNotices();
   };
   window.submitPinnedNotice=function(){
     const draft=document.getElementById('pinnedNoticeDraft');
     const creatorSelect=document.getElementById('pinnedNoticeCreator');
+    const scheduleInput=document.getElementById('pinnedNoticeSchedule');
     const msg=(draft?.value||'').trim();
     const creator=(creatorSelect?.value||'').trim();
     if(!creator){ toast('공지 작성자를 출근자 중에서 선택해주세요'); creatorSelect?.focus(); return; }
     if(!msg){ toast('공지 내용을 입력해주세요'); draft?.focus(); return; }
-    pinnedNotices.push({id:noticeId(), text:msg, creator, mascot:mascotForCreator(creator), createdAt:Date.now()});
+
+    const requestedAt=koreaScheduleValueToEpoch(scheduleInput?.value||'');
+    const isFuture=requestedAt > Date.now() + 1000;
+    pinnedNotices.push({
+      id:noticeId(),
+      text:msg,
+      creator,
+      mascot:mascotForCreator(creator),
+      createdAt:Date.now(),
+      scheduledAt:isFuture ? requestedAt : 0
+    });
+
     if(draft) draft.value='';
-    renderPinnedNotices({popup:true}); syncGlobalNotices();
-    toast(`공지 ${pinnedNotices.length}개가 표시 중이에요`);
+    if(scheduleInput) scheduleInput.value='';
+    renderPinnedNotices({popup:!isFuture});
+    syncGlobalNotices();
+
+    if(isFuture){
+      toast(`공지 예약 완료 · ${formatKoreaSchedule(requestedAt)}`);
+    } else if(requestedAt){
+      toast('예약 시간이 이미 지나서 공지를 바로 표시했어요');
+    } else {
+      toast(`공지 ${activePinnedNotices().length}개가 표시 중이에요`);
+    }
   };
   window.clearPinnedNotice=function(){
     pinnedNotices=[];
@@ -4711,7 +4971,40 @@ let allowSaveBeforeInitialSnapshot = false;
       showSmartPopup('👽 GOOD JOB!',msg,'alienSupport'); showCheer('👽 '+msg); speakCheer(msg);
     },620);
   };
-  window.dismissPinnedNotice=function(){ if(pinnedNotices[0]) window.dismissPinnedNoticeById(pinnedNotices[0].id); };
+  window.dismissPinnedNotice=function(){
+    const visible=activePinnedNotices();
+    if(visible[0]) window.dismissPinnedNoticeById(visible[0].id);
+  };
+  window.cancelScheduledNoticeById=function(id){
+    const item=pinnedNotices.find(n=>n.id===id && Number(n.scheduledAt||0)>Date.now());
+    if(!item) return;
+    if(!window.confirm(`예약 공지를 취소할까요?\n${formatKoreaSchedule(item.scheduledAt)} · ${item.text}`)) return;
+    pinnedNotices=pinnedNotices.filter(n=>n.id!==id);
+    renderPinnedNotices({popup:false});
+    syncGlobalNotices();
+    toast('예약 공지를 취소했어요');
+  };
+  function checkScheduledNotices(){
+    const alerted=loadAlertedNoticeIds();
+    const due=pinnedNotices
+      .filter(n=>Number(n.scheduledAt||0)>0 && Number(n.scheduledAt||0)<=Date.now() && !alerted.has(String(n.id)))
+      .sort((a,b)=>Number(a.scheduledAt||0)-Number(b.scheduledAt||0));
+
+    renderScheduledNoticeQueue();
+    if(!due.length){ scheduleNextNoticeAlarm(); return; }
+
+    // If the tab was hidden at the exact time, show the alarm as soon as the dashboard is visible again.
+    if(document.hidden){ scheduleNextNoticeAlarm(); return; }
+
+    due.forEach(item=>rememberAlertedNoticeId(item.id));
+    renderPinnedNotices({popup:false});
+    const latest=due[due.length-1];
+    const extra=due.length>1 ? ` 외 ${due.length-1}개` : '';
+    showSmartPopup(`⏰ ${latest.creator ? latest.creator+'님의 ' : ''}예약 공지${extra}`, latest.text);
+    playReminderSound('default');
+    speakCheer('예약 공지 시간입니다.');
+    showCheer(`⏰ 예약 공지 · ${latest.text}`);
+  }
 
   const baseCollect=window.forenaCollectData || collectData;
   const baseApply=window.forenaApplyData || applyData;
@@ -4780,7 +5073,15 @@ let allowSaveBeforeInitialSnapshot = false;
     showSmartPopup('🌿 건강 리마인더',msg,'alienSupport'); showCheer('🌿 잠깐 자세와 눈을 쉬어주세요'); speakCheer(msg);
   }
   function startHealthReminders(){ if(healthTimer) clearInterval(healthTimer); healthTimer=setInterval(runHealthReminder,HEALTH_INTERVAL_MS); }
-  document.addEventListener('DOMContentLoaded',()=>{ loadNoticesLocal(); renderPinnedNotices({popup:false}); startHealthReminders(); refreshNoticeCreatorOptions(); });
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) checkScheduledNotices(); });
+  window.addEventListener('focus',checkScheduledNotices);
+  document.addEventListener('DOMContentLoaded',()=>{
+    loadNoticesLocal();
+    renderPinnedNotices({popup:false});
+    checkScheduledNotices();
+    startHealthReminders();
+    refreshNoticeCreatorOptions();
+  });
 })();
 </script>
 
