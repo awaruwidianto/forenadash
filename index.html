@@ -1972,12 +1972,6 @@ body::before {
         </div>
         <input id="pinnedNotice" type="hidden" value="" />
       </div>
-      <div class="notice-schedule-row">
-        <div class="notice-schedule-label">⏰ 예약 표시</div>
-        <input id="pinnedNoticeSchedule" type="datetime-local" aria-label="공지 예약 날짜와 시간" />
-        <div class="hint-inline">비워두면 즉시 표시 · 예약하면 선택한 한국 시간에 알림과 함께 표시돼요.</div>
-      </div>
-      <div id="scheduledNoticeQueue" class="scheduled-notice-queue" aria-live="polite"></div>
     </section>
     <div id="stickyNoticeStack" class="sticky-notice-stack" aria-live="polite"></div>
 
@@ -2199,21 +2193,29 @@ body::before {
           </div>
           <button onclick="sendTeamAnnouncement()">모두에게 팝업 보내기</button>
         </div>
-        <div class="hint">보내면 현재 페이지를 열고 있는 팀원들에게 팝업으로 보여요.</div>
+        <div class="team-announcement-schedule-row">
+          <div>
+            <label>⏰ 예약 공지 날짜 / 시간 (선택)</label>
+            <input id="teamAnnouncementSchedule" type="datetime-local" aria-label="팀 공지 예약 날짜와 시간" />
+          </div>
+          <div class="hint-inline">비워두면 지금 바로 전송 · 미래 시간을 선택하면 해당 한국 시간에 팀 팝업으로 표시돼요.</div>
+        </div>
+        <div id="teamAnnouncementScheduledQueue" class="team-announcement-scheduled-queue" aria-live="polite"></div>
+        <div class="hint">보내면 현재 페이지를 열고 있는 팀원들에게 팝업으로 보여요. 예약 시간은 한국 시간(KST) 기준입니다.</div>
       </section>
     </div>
 
     <section class="card full history-card" id="historyCard" style="margin-top:22px;">
       <div class="history-header">
         <h2>📈 Daily Summary</h2>
-        <div class="history-note">최근 14일 예약 흐름 + Monthly Ranking</div>
+        <div class="history-note">이번 달 전체 예약 흐름 + Monthly Ranking</div>
       </div>
       <div class="hint">날짜별 요약 숫자만 저장해서 오래 써도 가볍게 유지돼요.</div>
       <div class="summary-stats" id="summaryStats">
         <div class="summary-stat"><div class="label">오늘 예약</div><div class="value">-</div></div>
         <div class="summary-stat"><div class="label">어제 대비</div><div class="value">-</div></div>
         <div class="summary-stat"><div class="label">월간 최고</div><div class="value">-</div></div>
-        <div class="summary-stat"><div class="label">최근 평균</div><div class="value">-</div></div>
+        <div class="summary-stat"><div class="label">월 평균</div><div class="value">-</div></div>
       </div>
       <div class="history-layout">
         <div>
@@ -3563,14 +3565,25 @@ function renderHistoryChart(summaryData){
   const cleanEntries = Object.entries(summaryData || {})
     .filter(([date, data]) => data && typeof data.totalReservation !== 'undefined')
     .sort(([a],[b]) => a.localeCompare(b));
-  const recentEntries = cleanEntries.slice(-14);
-  if(recentEntries.length === 0){
-    chartBox.innerHTML = '<div class="history-empty">아직 저장된 daily summary가 없어요. 오늘 입력하면 자동으로 쌓입니다.</div>';
+  const monthPrefix = currentMonthPrefix();
+  const monthChartEntries = cleanEntries
+    .filter(([date]) => date.startsWith(monthPrefix))
+    .sort(([a],[b]) => a.localeCompare(b));
+  if(monthChartEntries.length === 0){
+    chartBox.innerHTML = '<div class="history-empty">이번 달에 저장된 daily summary가 아직 없어요. 입력하면 날짜별로 자동으로 쌓입니다.</div>';
     if(rankingBox) rankingBox.innerHTML = '<div class="history-empty">이번 달 데이터가 아직 없어요.</div>';
+    if(statsBox){
+      statsBox.innerHTML = `
+        <div class="summary-stat"><div class="label">오늘 예약</div><div class="value">0건</div></div>
+        <div class="summary-stat"><div class="label">어제 대비</div><div class="value">-</div></div>
+        <div class="summary-stat"><div class="label">월간 최고</div><div class="value">0건</div></div>
+        <div class="summary-stat"><div class="label">월 평균</div><div class="value">0건</div></div>
+      `;
+    }
     return;
   }
-  const max = Math.max(1, ...recentEntries.map(([,data]) => Number(data.totalReservation || 0)));
-  chartBox.innerHTML = recentEntries.map(([date, data]) => {
+  const max = Math.max(1, ...monthChartEntries.map(([,data]) => Number(data.totalReservation || 0)));
+  chartBox.innerHTML = monthChartEntries.map(([date, data]) => {
     const total = Number(data.totalReservation || 0);
     const pct = Math.max(4, Math.round((total / max) * 100));
     return `<div class="history-row"><div>${formatHistoryDate(date)}</div><div class="history-bar-track"><div class="history-bar" style="width:${pct}%"></div></div><div>${total}건</div></div>`;
@@ -3590,9 +3603,7 @@ function renderHistoryChart(summaryData){
   }
   maybeShowYesterdayCongrats(todayTotal, yesterdayTotal);
 
-  const monthPrefix = currentMonthPrefix();
-  const monthEntries = cleanEntries
-    .filter(([date]) => date.startsWith(monthPrefix))
+  const monthEntries = [...monthChartEntries]
     .sort((a,b) => Number(b[1].totalReservation || 0) - Number(a[1].totalReservation || 0));
   if(rankingBox){
     if(monthEntries.length === 0){
@@ -3606,13 +3617,13 @@ function renderHistoryChart(summaryData){
     }
   }
   if(statsBox){
-    const avg = Math.round(recentEntries.reduce((sum,[,d]) => sum + Number(d.totalReservation || 0), 0) / recentEntries.length);
+    const avg = Math.round(monthChartEntries.reduce((sum,[,d]) => sum + Number(d.totalReservation || 0), 0) / monthChartEntries.length);
     const best = monthEntries.length ? Number(monthEntries[0][1].totalReservation || 0) : 0;
     statsBox.innerHTML = `
       <div class="summary-stat"><div class="label">오늘 예약</div><div class="value">${todayTotal}건</div></div>
       <div class="summary-stat"><div class="label">어제 대비</div><div class="value">${yesterdayTotal ? (diff >= 0 ? '+' : '') + diff + '건' : '-'}</div></div>
       <div class="summary-stat"><div class="label">월간 최고</div><div class="value">${best}건</div></div>
-      <div class="summary-stat"><div class="label">최근 평균</div><div class="value">${avg}건</div></div>
+      <div class="summary-stat"><div class="label">월 평균</div><div class="value">${avg}건</div></div>
     `;
   }
 }
@@ -3639,14 +3650,25 @@ function showAnnouncementPopup(message, title='📣 FORENA TEAM MESSAGE'){
 }
 async function sendTeamAnnouncement(){
   const input = document.getElementById('teamAnnouncementInput');
+  const scheduleInput = document.getElementById('teamAnnouncementSchedule');
   const msg = (input?.value || '').trim();
+  const scheduleValue = (scheduleInput?.value || '').trim();
   if(!msg){ alert('공지 메시지를 입력해주세요.'); return; }
-  if(window.forenaSendAnnouncement){
+  if(window.forenaSendOrScheduleAnnouncement){
+    const result = await window.forenaSendOrScheduleAnnouncement(msg, scheduleValue);
+    if(result?.ok !== false){
+      input.value = '';
+      if(scheduleInput) scheduleInput.value = '';
+      toast(result?.scheduled ? `팀 공지 예약 완료 · ${result.label}` : '팀 공지를 보냈어요');
+    }
+  } else if(window.forenaSendAnnouncement && !scheduleValue){
     await window.forenaSendAnnouncement(msg);
     input.value = '';
     toast('팀 공지를 보냈어요');
   } else {
     showAnnouncementPopup(msg);
+    input.value = '';
+    if(scheduleInput) scheduleInput.value = '';
     toast('테스트 팝업을 띄웠어요');
   }
 }
@@ -3910,28 +3932,29 @@ async function maybeAutoRolloverKoreaDate(){
   updateTodayDateDisplay();
   if(today === lastObservedKoreaDate) return;
 
-  const previousToday = lastObservedKoreaDate;
+  // Midnight KST is a hard daily reset. Never carry the previous day's
+  // visible form values into the new report date, even if an older date
+  // was manually selected before midnight.
   lastObservedKoreaDate = today;
 
   const reportDateEl = document.getElementById('reportDate');
   if(!reportDateEl) return;
 
-  // Respect a deliberately selected historical/future report date.
-  const selectedDate = reportDateEl.value || previousToday;
-  if(selectedDate !== previousToday) return;
-
   suppressLocalSave = true;
   reportDateEl.value = today;
   clearFormForNewKoreaDate();
   await autoSetShiftForKoreaDate();
-  loadData();
   resetReminderStateForToday();
   updateAll();
   suppressLocalSave = false;
   lastManualReportDate = today;
 
+  // Do not load a local form snapshot here: the new day must begin fresh.
+  // Firebase now points at today's separate report. If another teammate has
+  // already entered TODAY'S data, realtime sync can still show that valid
+  // same-day data; yesterday's report is never copied forward.
   if(window.forenaAttachRealtimeListener) window.forenaAttachRealtimeListener(true);
-  toast(`${today} 새 날짜 데이터로 자동 전환됐어요`);
+  toast(`${today} 00:00 새 날짜로 초기화됐어요`);
 }
 
 function scheduleKoreaMidnightRollover(){
@@ -4263,6 +4286,113 @@ let allowSaveBeforeInitialSnapshot = false;
       });
     }
     window.forenaSendAnnouncement = sendAnnouncement;
+
+    function koreaDateTimeLocalToEpoch(value){
+      const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+      if(!match) return 0;
+      const y=Number(match[1]), mo=Number(match[2]), d=Number(match[3]), h=Number(match[4]), mi=Number(match[5]);
+      return Date.UTC(y, mo - 1, d, h - 9, mi, 0, 0);
+    }
+    function formatKoreaAnnouncementTime(epoch){
+      if(!epoch) return '';
+      try {
+        return new Intl.DateTimeFormat('ko-KR', {
+          timeZone:'Asia/Seoul', year:'numeric', month:'2-digit', day:'2-digit',
+          hour:'2-digit', minute:'2-digit', hour12:false
+        }).format(new Date(epoch));
+      } catch(e) {
+        return new Date(epoch + 9 * 3600000).toISOString().slice(0,16).replace('T',' ');
+      }
+    }
+
+    let scheduledTeamAnnouncements = {};
+    let scheduledTeamAnnouncementTimer = null;
+    const teamAnnouncementScheduleRef = ref(db, "teamAnnouncementSchedule");
+
+    function scheduledTeamEntries(){
+      return Object.entries(scheduledTeamAnnouncements || {})
+        .filter(([,item]) => item && item.message && Number(item.scheduledAt || 0) > 0)
+        .map(([id,item]) => ({id, ...item}))
+        .sort((a,b) => Number(a.scheduledAt || 0) - Number(b.scheduledAt || 0));
+    }
+    function renderScheduledTeamAnnouncementQueue(){
+      const box = document.getElementById('teamAnnouncementScheduledQueue');
+      if(!box) return;
+      const future = scheduledTeamEntries().filter(item => Number(item.scheduledAt) > Date.now());
+      box.innerHTML = future.map(item => `
+        <div class="team-announcement-scheduled-item">
+          <span class="team-announcement-scheduled-time">⏰ ${escapeHtml(formatKoreaAnnouncementTime(item.scheduledAt))}</span>
+          <span class="team-announcement-scheduled-text">예약된 팀 공지 · 내용은 예약 시간에 공개돼요</span>
+          <button type="button" class="secondary small team-announcement-scheduled-cancel" onclick="cancelScheduledTeamAnnouncement('${item.id}')">예약 취소</button>
+        </div>`).join('');
+    }
+    function scheduleNextTeamAnnouncementCheck(){
+      if(scheduledTeamAnnouncementTimer) clearTimeout(scheduledTeamAnnouncementTimer);
+      scheduledTeamAnnouncementTimer = null;
+      const next = scheduledTeamEntries().find(item => Number(item.scheduledAt) > Date.now());
+      if(!next) return;
+      const wait = Math.max(250, Math.min(2147483000, Number(next.scheduledAt) - Date.now() + 120));
+      scheduledTeamAnnouncementTimer = setTimeout(checkScheduledTeamAnnouncements, wait);
+    }
+    function checkScheduledTeamAnnouncements(){
+      renderScheduledTeamAnnouncementQueue();
+      const due = scheduledTeamEntries().filter(item => {
+        if(Number(item.scheduledAt) > Date.now()) return false;
+        return !localStorage.getItem('forenaSeenScheduledTeamAnnouncement_' + item.id);
+      });
+      if(!due.length){ scheduleNextTeamAnnouncementCheck(); return; }
+      if(document.hidden) return;
+
+      due.forEach(item => localStorage.setItem('forenaSeenScheduledTeamAnnouncement_' + item.id, 'seen'));
+      const latest = due[due.length - 1];
+      const extra = due.length > 1 ? ` 외 ${due.length - 1}개` : '';
+      showAnnouncementPopup(latest.message, `⏰ FORENA 예약 팀 공지${extra}`);
+      playReminderSound('default');
+      speakCheer('예약 팀 공지 시간입니다.');
+      showCheer(`⏰ 예약 팀 공지 · ${latest.message}`);
+      scheduleNextTeamAnnouncementCheck();
+    }
+
+    window.forenaSendOrScheduleAnnouncement = async function(message, scheduleValue){
+      const requestedAt = koreaDateTimeLocalToEpoch(scheduleValue);
+      if(scheduleValue && !requestedAt){
+        toast('예약 날짜와 시간을 다시 확인해주세요');
+        return {ok:false};
+      }
+      if(!requestedAt || requestedAt <= Date.now() + 1000){
+        await sendAnnouncement(message);
+        return {ok:true, scheduled:false};
+      }
+      const id = Date.now() + '_' + Math.random().toString(36).slice(2,8);
+      const reporter = document.getElementById("reporter")?.value || "";
+      await set(ref(db, "teamAnnouncementSchedule/" + id), {
+        id,
+        type:'scheduledTeamAnnouncement',
+        title:'⏰ FORENA 예약 팀 공지',
+        message,
+        sender:reporter,
+        scheduledAt:requestedAt,
+        createdAt:serverTimestamp()
+      });
+      return {ok:true, scheduled:true, label:formatKoreaAnnouncementTime(requestedAt)};
+    };
+
+    window.cancelScheduledTeamAnnouncement = async function(id){
+      const item = scheduledTeamAnnouncements?.[id];
+      if(!item) return;
+      if(!window.confirm(`예약 팀 공지를 취소할까요?\n${formatKoreaAnnouncementTime(item.scheduledAt)} · ${item.message}`)) return;
+      await set(ref(db, "teamAnnouncementSchedule/" + id), null);
+      toast('예약 팀 공지를 취소했어요');
+    };
+
+    onValue(teamAnnouncementScheduleRef, (snapshot) => {
+      scheduledTeamAnnouncements = snapshot.val() || {};
+      renderScheduledTeamAnnouncementQueue();
+      checkScheduledTeamAnnouncements();
+    }, (error) => console.error('Team announcement schedule sync failed', error));
+
+    document.addEventListener('visibilitychange', () => { if(!document.hidden) checkScheduledTeamAnnouncements(); });
+    window.addEventListener('focus', checkScheduledTeamAnnouncements);
 
     onValue(ref(db, "teamAnnouncement/current"), (snapshot) => {
       const data = snapshot.val();
@@ -4704,6 +4834,50 @@ let allowSaveBeforeInitialSnapshot = false;
   }
 </style>
 
+<style id="teamAnnouncementSchedulingPatch">
+  .team-announcement-schedule-row {
+    display:grid;
+    grid-template-columns:minmax(220px,320px) minmax(0,1fr);
+    gap:10px;
+    align-items:end;
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px dashed color-mix(in srgb, var(--hour-accent, #ff9fc9) 38%, white);
+  }
+  #teamAnnouncementSchedule { min-height:40px; height:40px; font-weight:800; }
+  .team-announcement-scheduled-queue { display:grid; gap:7px; margin-top:10px; }
+  .team-announcement-scheduled-queue:empty { display:none; }
+  .team-announcement-scheduled-item {
+    display:grid;
+    grid-template-columns:auto minmax(0,1fr) auto;
+    gap:8px;
+    align-items:center;
+    padding:9px 10px;
+    border-radius:14px;
+    border:1px solid color-mix(in srgb, var(--hour-secondary, #a9dcff) 58%, white);
+    background:linear-gradient(135deg, rgba(255,255,255,.96), color-mix(in srgb, var(--hour-accent-soft, #ffe7f2) 48%, white));
+    color:#352842;
+    font-size:11.5px;
+    font-weight:800;
+  }
+  .team-announcement-scheduled-time {
+    padding:5px 8px;
+    border-radius:999px;
+    background:rgba(255,255,255,.95);
+    color:var(--hour-accent-strong, #d85f8a);
+    font-size:11px;
+    font-weight:950;
+    white-space:nowrap;
+  }
+  .team-announcement-scheduled-text { min-width:0; overflow-wrap:anywhere; }
+  .team-announcement-scheduled-cancel { min-height:30px !important; padding:5px 8px !important; font-size:10.5px !important; }
+  @media(max-width:700px){
+    .team-announcement-schedule-row { grid-template-columns:minmax(0,1fr); align-items:stretch; }
+    .team-announcement-scheduled-item { grid-template-columns:minmax(0,1fr) auto; }
+    .team-announcement-scheduled-time { grid-column:1 / -1; width:max-content; max-width:100%; }
+  }
+</style>
+
 <style id="mobileCompactAndMultiNoticePatch">
   html, body { width:100%; max-width:100%; overflow-x:hidden; }
   .sticky-notice-stack {
@@ -4805,14 +4979,10 @@ let allowSaveBeforeInitialSnapshot = false;
     }
   }
   function activePinnedNotices(){
-    const now = Date.now();
-    return pinnedNotices.filter(n => !Number(n.scheduledAt || 0) || Number(n.scheduledAt || 0) <= now);
+    return pinnedNotices;
   }
   function futurePinnedNotices(){
-    const now = Date.now();
-    return pinnedNotices
-      .filter(n => Number(n.scheduledAt || 0) > now)
-      .sort((a,b) => Number(a.scheduledAt || 0) - Number(b.scheduledAt || 0));
+    return [];
   }
   function loadAlertedNoticeIds(){
     try {
@@ -4834,7 +5004,7 @@ let allowSaveBeforeInitialSnapshot = false;
       if(Array.isArray(saved)) pinnedNotices=saved.filter(n=>n&&n.text).map(n=>({
         id:n.id||noticeId(), text:String(n.text), creator:String(n.creator||''),
         mascot:mascotForCreator(n.creator,n.mascot), createdAt:Number(n.createdAt||Date.now()),
-        scheduledAt:Number(n.scheduledAt||0)
+        scheduledAt:0
       }));
     } catch(e) {}
   }
@@ -4915,7 +5085,7 @@ let allowSaveBeforeInitialSnapshot = false;
       creator:String(n.creator||''),
       mascot:mascotForCreator(n.creator,n.mascot),
       createdAt:Number(n.createdAt||Date.now()),
-      scheduledAt:Number(n.scheduledAt||0)
+      scheduledAt:0
     }));
     saveNoticesLocal();
     renderPinnedNotices({popup:false});
@@ -4924,35 +5094,24 @@ let allowSaveBeforeInitialSnapshot = false;
   window.submitPinnedNotice=function(){
     const draft=document.getElementById('pinnedNoticeDraft');
     const creatorSelect=document.getElementById('pinnedNoticeCreator');
-    const scheduleInput=document.getElementById('pinnedNoticeSchedule');
     const msg=(draft?.value||'').trim();
     const creator=(creatorSelect?.value||'').trim();
     if(!creator){ toast('공지 작성자를 출근자 중에서 선택해주세요'); creatorSelect?.focus(); return; }
     if(!msg){ toast('공지 내용을 입력해주세요'); draft?.focus(); return; }
 
-    const requestedAt=koreaScheduleValueToEpoch(scheduleInput?.value||'');
-    const isFuture=requestedAt > Date.now() + 1000;
     pinnedNotices.push({
       id:noticeId(),
       text:msg,
       creator,
       mascot:mascotForCreator(creator),
       createdAt:Date.now(),
-      scheduledAt:isFuture ? requestedAt : 0
+      scheduledAt:0
     });
 
     if(draft) draft.value='';
-    if(scheduleInput) scheduleInput.value='';
-    renderPinnedNotices({popup:!isFuture});
+    renderPinnedNotices({popup:true});
     syncGlobalNotices();
-
-    if(isFuture){
-      toast(`공지 예약 완료 · ${formatKoreaSchedule(requestedAt)}`);
-    } else if(requestedAt){
-      toast('예약 시간이 이미 지나서 공지를 바로 표시했어요');
-    } else {
-      toast(`공지 ${activePinnedNotices().length}개가 표시 중이에요`);
-    }
+    toast(`공지 ${activePinnedNotices().length}개가 표시 중이에요`);
   };
   window.clearPinnedNotice=function(){
     pinnedNotices=[];
