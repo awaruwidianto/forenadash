@@ -1960,6 +1960,7 @@ body::before {
       </div>
     </section>
 
+    <div id="stickyNoticeStack" class="sticky-notice-stack" aria-live="polite"></div>
     <div id="stickyNoticeOverflowStack" class="sticky-notice-overflow-stack" aria-live="polite"></div>
 
     <section class="card full mini-notice-card">
@@ -1973,7 +1974,13 @@ body::before {
         <input id="pinnedNotice" type="hidden" value="" />
       </div>
     </section>
-    <div id="stickyNoticeStack" class="sticky-notice-stack" aria-live="polite"></div>
+
+
+    <section class="card full uppercase-converter">
+      <label for="uppercaseName">🔠 UPPERCASE</label>
+      <input id="uppercaseName" type="text" autocomplete="off" spellcheck="false" placeholder="이름 붙여넣기 → E) NAME" aria-label="E) 대문자 이름 변환" />
+      <button type="button" onclick="copyUppercaseName()">복사</button>
+    </section>
 
     <section class="card full quick-tools-card">
       <h2>🧰 바로가기</h2>
@@ -3137,7 +3144,7 @@ function playReminderSound(kind='default'){
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if(!AudioContext) return;
     const ctx = new AudioContext();
-    const notes = kind === 'markvu' ? [660, 880, 660] : [523.25, 659.25, 783.99];
+    const notes = kind === 'achievement' ? [523.25,659.25,783.99,1046.5,1318.5] : kind === 'markvu' ? [660, 880, 660] : [523.25, 659.25, 783.99];
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -3298,7 +3305,7 @@ function updateGameDashboard(){
   const progress = Math.max(0, Math.min(100, ((total - prevMilestone) / (info.next - prevMilestone)) * 100));
   if(barEl) barEl.style.width = `${progress}%`;
   if(milestonesEl){
-    milestonesEl.innerHTML = [10,20,40,60,80,100].map(m => `<span class="milestone ${total >= m ? 'done' : ''}">${total >= m ? '✅' : '🎯'} ${m}건</span>`).join('');
+    milestonesEl.innerHTML = [10,20,30,40,50,60,70,80,90,100].map(m => `<span class="milestone ${total >= m ? 'done' : ''}">${total >= m ? '✅' : '🎯'} ${m}건</span>`).join('');
   }
 }
 
@@ -3328,34 +3335,47 @@ if('speechSynthesis' in window){
   findKoreanVoice();
 }
 
-function speakCheer(textToSay){
+function speechTextOnly(value){
+  return String(value || '').replace(/[#*0-9]\uFE0F?\u20E3|[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\u200D\uFE0E\uFE0F\u20E3\u{E0020}-\u{E007F}]/gu, '').replace(/\s+/g, ' ').trim();
+}
+let cheerVoiceIndex = 0;
+function speakCheer(textToSay, options={}){
+  let finished=false;
+  let timer;
+  const finish=()=>{ if(finished) return; finished=true; clearTimeout(timer); options.onend?.(); };
   try {
     const volume = effectiveVolume();
-    if(volume <= 0) return;
-    if(!('speechSynthesis' in window)) return;
+    const cleanText = speechTextOnly(textToSay);
+    if(volume <= 0 || !cleanText || !('speechSynthesis' in window)){ finish(); return; }
     window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(textToSay);
+    const utter = new SpeechSynthesisUtterance(cleanText);
+    const voices = window.speechSynthesis.getVoices().filter(v=>/^ko(?:[-_]|$)/i.test(v.lang));
+    // Voice APIs do not expose gender; known male names are included first, then every available Korean voice rotates.
+    voices.sort((a,b)=>Number(/InJoon|Hyunsu|Hyunwoo|Minho|남성|male/i.test(b.name))-Number(/InJoon|Hyunsu|Hyunwoo|Minho|남성|male/i.test(a.name)));
+    const turn=cheerVoiceIndex++;
     utter.lang = 'ko-KR';
-    utter.voice = koreanVoice || findKoreanVoice();
-    utter.rate = 0.98;
-    utter.pitch = 1.08;
-    utter.volume = Math.max(0, Math.min(1, 0.95 * volume));
+    utter.voice = voices.length ? voices[turn % voices.length] : (koreanVoice || findKoreanVoice());
+    utter.rate = options.scream ? 1.1 : [0.98,1.04,1.0][turn % 3];
+    utter.pitch = options.scream ? 1.35 : [0.9,1.08,1.0][turn % 3];
+    utter.volume = Math.max(0, Math.min(1, volume));
+    utter.onend=finish;
+    utter.onerror=finish;
+    if(options.onend) timer=setTimeout(finish, 2600);
     window.speechSynthesis.speak(utter);
-  } catch(e) {}
+  } catch(e) { finish(); }
 }
+function screamOutLoud(onend){ speakCheer('으아아아악!', {scream:true, onend}); }
 
 function milestoneVoiceText(milestone){
-  if(milestone >= 100) return '백 건 달성! 오늘 최고예요! 축하해요!';
-  if(milestone >= 80) return '미쳤어요! 팔십 건 돌파! 축하해요!';
-  if(milestone >= 60) return '레전드! 육십 건 돌파! 축하해요!';
-  if(milestone >= 40) return '마스터! 사십 건 달성! 축하해요!';
-  if(milestone >= 20) return '대박이네요! 이십 건 달성! 축하해요!';
-  if(milestone >= 10) return '와! 예약 십 건 돌파! 축하해요!';
-  return '축하합니다!';
+  return `업적 달성! 예약 ${milestone}건 돌파! ${milestone >= 100 ? '전설의 팀 포레나!' : '팀 포레나 레벨 업!'} 정말 대단해요!`;
+}
+function crossedBookingMilestones(after,before){
+  const milestone=Math.floor(after / 10)*10;
+  return milestone >= 10 && before < milestone ? [milestone] : [];
 }
 
 function celebrateReservationIncrease(after, before){
-  const crossed = [10,20,40,60,80,100].filter(m => before < m && after >= m);
+  const crossed = crossedBookingMilestones(after, before);
   const milestoneHit = crossed.length ? crossed[crossed.length - 1] : null;
   if(milestoneHit){
     const voice = milestoneVoiceText(milestoneHit);
@@ -3377,9 +3397,9 @@ function celebrateSameDayIncrease(after, before){
 }
 
 function celebrateCancelIncrease(){
-  showCheer('🥲 아이고... 취소됐네요');
+  showCheer('😱 으아아아악!');
   toast('취소가 추가됐어요');
-  speakCheer('아이고... 취소됐네요');
+  screamOutLoud();
 }
 
 function celebrateChangeIncrease(){
@@ -3678,7 +3698,7 @@ function reportText(){
   const date = formatShortDate(text('reportDate'));
   const reportTime = text('reportTime') || defaultReportTimeForShift();
   const timeLabel = `${reportTime} 기준`;
-  return `원장님 안녕하세요~!\n\n🔸${date} CS 예약보고 (${timeLabel})\n\n금일 총 예약건 ${t.reservations}건(다른 날짜 포함), 당일예약 ${t.sameDay}명(전화예약제외), 워크인 ${t.walkin}건, 예약취소 ${t.cancels}건, 변경 ${t.changes}건입니다.\n\n근무인원:\n${staffLineText() || '-'}\n\n<취소 사유>\n**${text('cancelReason') || '없음'}\n\n<특이 사항>\n**${text('notes') || '없음'}\n\n구체적인 현황도 같이 전달드립니다.\n\n🌐 홈페이지\n- 예약: ${n('home_res')}건 (당예포함)\n- 추가예약: ${n('wix_res')}건 (1인 대표예약 추가인원 수)\n- 당예: ${n('home_same')}건\n- 취소: ${n('home_cancel')}건\n\n🔁 예약변경\n- 변경: ${n('home_change')}건\n\n🚶 워크인\n- 워크인: ${n('walkin_count')}건\n\n💬 왓츠앱\n- 예약: ${n('wa_res')}건\n- 당예: ${n('wa_same')}건\n- 취소: ${n('wa_cancel')}건\n<${sourceLine()}>\n\n📸 인스타\n- 본계정 + 부계정 예약: ${n('ig_res')}건\n- 본계정 + 부계정 당일 예약: ${n('ig_same')}건\n- 베타 예약: ${n('ig_beta')}건\n- 취소: ${n('ig_cancel')}건\n\n📘 페이스북\n- 예약: ${n('fb_res')}건\n- 취소: ${n('fb_cancel')}건\n\n🤝 업체등\n${agencyLines()}\n\n🎵 틱톡\n- 예약: ${n('tt_res')}건\n- 베타 예약: ${n('tt_beta')}건\n- 취소: ${n('tt_cancel')}건\n\n✉️ 이메일\n- 당예: ${n('email_same')}건\n- 예약: ${n('email_res')}건\n- 취소: ${n('email_cancel')}건\n\n\n--\n\n💌 문의\n- 인스타 일반 문의 = ${n('inq_ig')}건\n- 왓츠앱 일반 문의 = 답변드린 거 대략 ${n('inq_wa')}건\n- 틱톡 일반 문의 = ${n('inq_tt')}건\n- 이메일 일반 문의 = ${n('inq_email')}건\n- 메신저 문의 = ${n('inq_msg')}건`;
+  return `원장님 안녕하세요~!\n\n🔸${date} CS 예약보고 (${timeLabel})\n\n금일 총 예약건 ${t.reservations}건(다른 날짜 포함), 홈페이지 당일예약 ${n('home_same')}명, 플랫폼 당일예약 ${t.sameDay - n('home_same')}건 (전화예약제외), 워크인 ${t.walkin}건, 예약취소 ${t.cancels}건, 변경 ${t.changes}건입니다.\n\n👩‍💻 근무인원\n${staffLineText() || '-'}\n\n<취소 사유>\n**${text('cancelReason') || '없음'}\n\n<특이 사항>\n**${text('notes') || '없음'}\n\n구체적인 현황도 같이 전달드립니다.\n\n🌐 홈페이지\n- 예약: ${n('home_res')}건 (당예포함)\n- 추가예약: ${n('wix_res')}건 (1인 대표예약 추가인원 수)\n- 당예: ${n('home_same')}건\n- 취소: ${n('home_cancel')}건\n\n🔁 예약변경\n- 변경: ${n('home_change')}건\n\n🚶 워크인\n- 워크인: ${n('walkin_count')}건\n\n💬 왓츠앱\n- 예약: ${n('wa_res')}건\n- 당예: ${n('wa_same')}건\n- 취소: ${n('wa_cancel')}건\n<${sourceLine()}>\n\n📸 인스타\n- 본계정 + 부계정 예약: ${n('ig_res')}건\n- 본계정 + 부계정 당일 예약: ${n('ig_same')}건\n- 베타 예약: ${n('ig_beta')}건\n- 취소: ${n('ig_cancel')}건\n\n📘 페이스북\n- 예약: ${n('fb_res')}건\n- 취소: ${n('fb_cancel')}건\n\n🤝 업체등\n${agencyLines()}\n\n🎵 틱톡\n- 예약: ${n('tt_res')}건\n- 베타 예약: ${n('tt_beta')}건\n- 취소: ${n('tt_cancel')}건\n\n✉️ 이메일\n- 당예: ${n('email_same')}건\n- 예약: ${n('email_res')}건\n- 취소: ${n('email_cancel')}건\n\n\n--\n\n💌 문의\n- 인스타 일반 문의 = ${n('inq_ig')}건\n- 왓츠앱 일반 문의 = 답변드린 거 대략 ${n('inq_wa')}건\n- 틱톡 일반 문의 = ${n('inq_tt')}건\n- 이메일 일반 문의 = ${n('inq_email')}건\n- 메신저 문의 = ${n('inq_msg')}건`;
 }
 
 function updatePreview(){
@@ -3690,7 +3710,7 @@ function updatePreview(){
     <h3>🔸${date} CS 예약보고 (${escapeHtml(timeLabel)})</h3>
     <div>원장님 안녕하세요~!</div>
     <br>
-    <div>금일 총 예약건 <b>${t.reservations}건</b>(다른 날짜 포함), 당일예약 <b>${t.sameDay}명</b>(전화예약제외), 워크인 <b>${t.walkin}건</b>, 예약취소 <b>${t.cancels}건</b>, 변경 <b>${t.changes}건</b>입니다.</div>
+    <div>금일 총 예약건 <b>${t.reservations}건</b>(다른 날짜 포함), 홈페이지 당일예약 <b>${n('home_same')}명</b>, 플랫폼 당일예약 <b>${t.sameDay - n('home_same')}건</b> (전화예약제외), 워크인 <b>${t.walkin}건</b>, 예약취소 <b>${t.cancels}건</b>, 변경 <b>${t.changes}건</b>입니다.</div>
     <div class="section"><div class="section-title">👩‍💻 근무인원</div><ul>${staffLineHtml()}</ul></div>
     <div class="section"><div class="section-title">취소 사유</div>**${escapeHtml(text('cancelReason') || '없음')}</div>
     <div class="section"><div class="section-title">특이 사항</div>**${escapeHtml(text('notes') || '없음')}</div>
@@ -4653,10 +4673,10 @@ let allowSaveBeforeInitialSnapshot = false;
   if(typeof originalCelebrateReservationIncrease === 'function'){
     window.celebrateReservationIncrease = function(after, before){
       originalCelebrateReservationIncrease(after, before);
-      const crossed = [10,20,40,60,80,100].filter(m => before < m && after >= m);
+      const crossed = crossedBookingMilestones(after, before);
       if(crossed.length){
         const milestone = crossed[crossed.length - 1];
-        setTimeout(() => window.launchUfoCheer(`예약 ${milestone}건 돌파! 정말 대단해요 🎉`, {milestone:true}), 250);
+        showBookingAchievement(milestone);
       }
     };
   }
@@ -5064,9 +5084,9 @@ let allowSaveBeforeInitialSnapshot = false;
       <div class="sticky-notice-craft" aria-hidden="true" title="${escapeHtml(item.creator||'작성자')}">${escapeHtml(mascotForCreator(item.creator,item.mascot))}</div>
       <div class="sticky-notice-paper"><span class="sticky-notice-title">NOTICE ${index+1}${item.creator ? ' · '+escapeHtml(item.creator) : ''}</span><span>${escapeHtml(item.text)}</span>
       <button type="button" class="sticky-notice-close" onclick="dismissPinnedNoticeById('${item.id}')" aria-label="공지 완료 및 닫기" title="완료했어요">×</button></div></div>`;
-    // Keep only active NOTICE 1-2 in the top floating area. Future scheduled notices stay hidden until due.
-    stack.innerHTML=visible.slice(0,2).map((item,index)=>noticeMarkup(item,index)).join('');
-    if(overflowStack) overflowStack.innerHTML=visible.slice(2).map((item,index)=>noticeMarkup(item,index+2)).join('');
+    // All active notices remain in normal flow below 오늘 업무.
+    stack.innerHTML=visible.map((item,index)=>noticeMarkup(item,index)).join('');
+    if(overflowStack) overflowStack.innerHTML='';
     renderScheduledNoticeQueue();
     syncLegacyNotice();
     refreshNoticeCreatorOptions();
@@ -5120,7 +5140,8 @@ let allowSaveBeforeInitialSnapshot = false;
     toast('모든 공지를 지웠어요');
   };
   window.dismissPinnedNoticeById=function(id){
-    if(!window.confirm('진짜 처리 완료인가요?')) return;
+    screamOutLoud(()=>{
+    if(!window.confirm('진짜 처리 완료인가요?')) { screamOutLoud(); return; }
     const el=document.querySelector(`[data-notice-id="${CSS.escape(id)}"]`);
     if(el) el.classList.add('notice-complete');
     setTimeout(()=>{
@@ -5129,6 +5150,7 @@ let allowSaveBeforeInitialSnapshot = false;
       const msg=pickRandom(['GOOD JOB! 공지 업무 완료했어요 ✨','수고했어요! 하나 더 멋지게 완료 👏','MISSION COMPLETE! 최고예요 🌟']);
       showSmartPopup('👽 GOOD JOB!',msg,'alienSupport'); showCheer('👽 '+msg); speakCheer(msg);
     },620);
+    });
   };
   window.dismissPinnedNotice=function(){
     const visible=activePinnedNotices();
@@ -5460,6 +5482,57 @@ let allowSaveBeforeInitialSnapshot = false;
   }
   document.addEventListener('DOMContentLoaded',initCrew);
 })();
+</script>
+
+
+<style id="requestedDashboardRefinements">
+  #stickyNoticeStack { position:static; inset:auto; transform:none; width:100%; z-index:auto; margin:0 0 10px; pointer-events:auto; }
+  #stickyNoticeStack:empty { display:none; }
+  #stickyNoticeStack .sticky-notice-paper { flex:1; max-width:none; }
+  .uppercase-converter { display:flex; gap:12px; align-items:center; }
+  .uppercase-converter label { margin:0; white-space:nowrap; }
+  .uppercase-converter input { flex:1; min-width:0; }
+  .uppercase-converter button { flex-shrink:0; }
+  .booking-achievement { position:fixed; right:18px; bottom:20px; width:min(330px,calc(100vw - 36px)); padding:18px 22px; z-index:9995; pointer-events:none; border:1px solid rgba(255,211,111,.85); border-radius:18px; background:linear-gradient(120deg,rgba(49,30,75,.78),rgba(111,58,117,.65)); color:white; box-shadow:0 0 28px #e4b56355; animation:achievementEntry .45s ease-out; }
+  .booking-achievement small { display:block; color:#ffe0a2; letter-spacing:2px; font-weight:800; }
+  .booking-achievement strong { display:block; font-size:25px; margin:7px 0; }
+  .booking-achievement::before { content:'✧'; position:absolute; right:20px; top:-14px; font-size:34px; color:#ffe0a2; animation:achievementSpark 1s ease-in-out 4; }
+  @keyframes achievementEntry { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes achievementSpark { 50% { transform:rotate(60deg) scale(1.3); opacity:.4; } }
+  @media(max-width:520px){ .uppercase-converter { flex-wrap:wrap; gap:8px; } .uppercase-converter label { width:100%; } }
+  @media(prefers-reduced-motion:reduce){ .booking-achievement,.booking-achievement::before { animation:none; } }
+</style>
+<script id="requestedDashboardUtilities">
+function uppercaseNameValue(value){
+  const name=String(value).replace(/^(?:\s*E\)\s*)+/i,'').trim().toUpperCase();
+  return name ? 'E) '+name : '';
+}
+const uppercaseNameInput=document.getElementById('uppercaseName');
+function convertUppercaseName(){ uppercaseNameInput.value=uppercaseNameValue(uppercaseNameInput.value); }
+uppercaseNameInput.addEventListener('input',event=>{ event.stopPropagation(); if(!event.isComposing) convertUppercaseName(); });
+uppercaseNameInput.addEventListener('change',event=>event.stopPropagation());
+uppercaseNameInput.addEventListener('compositionend',convertUppercaseName);
+async function copyUppercaseName(){
+  convertUppercaseName();
+  if(!uppercaseNameInput.value) return;
+  try { await navigator.clipboard.writeText(uppercaseNameInput.value); toast('복사했어요'); }
+  catch(error){
+    uppercaseNameInput.focus(); uppercaseNameInput.select();
+    try { if(document.execCommand('copy')) { toast('복사했어요'); return; } } catch(e) {}
+    toast('선택된 텍스트를 Ctrl+C / ⌘C로 복사해주세요');
+  }
+}
+let bookingAchievementTimer;
+function showBookingAchievement(milestone){
+  document.querySelector('.booking-achievement')?.remove();
+  clearTimeout(bookingAchievementTimer);
+  const card=document.createElement('div');
+  card.className='booking-achievement'; card.setAttribute('role','status');
+  card.innerHTML=`<small>✦ ACHIEVEMENT UNLOCKED</small><strong>예약 ${milestone}건 달성!</strong><span>LEVEL UP · TEAM FORENA</span>`;
+  document.body.appendChild(card);
+  bookingAchievementTimer=setTimeout(()=>card.remove(),4200);
+  playReminderSound('achievement');
+}
 </script>
 
 </body>
