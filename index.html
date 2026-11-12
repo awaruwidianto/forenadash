@@ -2182,12 +2182,11 @@ body::before {
       <section class="card full" style="margin-bottom:18px;">
         <h2>🧾 보고문 작업</h2>
         <div class="actions report-action-buttons">
-          <button id="showReportButton" class="closing-report-button" onclick="showReportPreview()">마감보고문 보기</button>
-          <button class="closing-report-button" onclick="copyReport()">마감 보고문 텍스트 복사</button>
-          <button class="open-report-button" onclick="showOpenReportPreview()">오픈보고문 보기</button>
           <button class="open-report-button" onclick="copyOpenReport()">오픈 보고문 텍스트 복사</button>
+          <button class="closing-report-button" onclick="copyReport()">마감 보고문 텍스트 복사</button>
+          <button id="showReportButton" class="closing-report-button" onclick="showCombinedReportPreview()">보고 보기</button>
         </div>
-        <div class="hint">마감보고문과 오픈보고문을 각각 미리보기/복사할 수 있어요. 입력 내용은 기존처럼 Firebase에 저장됩니다.</div>
+        <div class="hint">보고 보기에서 오픈·마감보고문을 함께 확인하고, 텍스트는 각각 복사할 수 있어요. 입력 내용은 기존처럼 Firebase에 저장됩니다.</div>
       </section>
       <div id="reportPreview" class="preview-hidden"></div>
 
@@ -3220,8 +3219,8 @@ function maybeRunTimedReminders(){
 }
 function staffFarewellEmoji(name){
   const key=String(name||'').trim().toLowerCase();
-  if(['와루','waru','awaru'].some(v=>key.includes(v))) return '🦖';
-  if(['요셉','yosep','joseph'].some(v=>key.includes(v))) return '🐱';
+  if(['와루','waru','awaru'].some(v=>key.includes(v))) return '🐮';
+  if(['요셉','yosep','joseph'].some(v=>key.includes(v))) return '🐸';
   if(['형규','영규','hyunggyu','younggyu'].some(v=>key.includes(v))) return '🐻';
   if(['유진','yujin'].some(v=>key.includes(v))) return '🐰';
   if(['소희','소희m','sohee'].some(v=>key.includes(v))) return '🐶';
@@ -3350,13 +3349,13 @@ function speakCheer(textToSay, options={}){
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(cleanText);
     const voices = window.speechSynthesis.getVoices().filter(v=>/^ko(?:[-_]|$)/i.test(v.lang));
-    // Voice APIs do not expose gender; known male names are included first, then every available Korean voice rotates.
-    voices.sort((a,b)=>Number(/InJoon|Hyunsu|Hyunwoo|Minho|남성|male/i.test(b.name))-Number(/InJoon|Hyunsu|Hyunwoo|Minho|남성|male/i.test(a.name)));
-    const turn=cheerVoiceIndex++;
+    // Keep a consistent Korean voice and a consistently high pitch for all announcements.
+    const highVoice = voices.find(v=>/female|여성|SunHi|Heami|Yuna|Sora|Seoyeon|JiYoung/i.test(v.name || ''))
+      || koreanVoice || findKoreanVoice() || voices[0] || null;
     utter.lang = 'ko-KR';
-    utter.voice = voices.length ? voices[turn % voices.length] : (koreanVoice || findKoreanVoice());
-    utter.rate = options.scream ? 1.1 : [0.98,1.04,1.0][turn % 3];
-    utter.pitch = options.scream ? 1.35 : [0.9,1.08,1.0][turn % 3];
+    if(highVoice) utter.voice = highVoice;
+    utter.rate = options.scream ? 1.1 : 1.04;
+    utter.pitch = options.scream ? 1.85 : 1.6;
     utter.volume = Math.max(0, Math.min(1, volume));
     utter.onend=finish;
     utter.onerror=finish;
@@ -3399,7 +3398,7 @@ function celebrateSameDayIncrease(after, before){
 function celebrateCancelIncrease(){
   showCheer('😱 으아아아악!');
   toast('취소가 추가됐어요');
-  screamOutLoud();
+  speakCheer('흐아아앙! 엉엉엉! 예약이 취소됐어요!', {scream:true});
 }
 
 function celebrateChangeIncrease(){
@@ -3815,6 +3814,23 @@ async function copyReport(){
   if(!validateSourceRoutes()) return;
   await navigator.clipboard.writeText(reportText());
   toast('마감 보고문을 복사했어요');
+}
+function showCombinedReportPreview(){
+  if(!validateSourceRoutes()) return;
+  syncInquiryDerivedTotals();
+  updatePreview();
+  const modal = document.getElementById('reportModal');
+  const body = document.getElementById('reportModalBody');
+  const preview = document.getElementById('reportPreview');
+  if(!modal || !body || !preview) return;
+  const closingHtml = preview.innerHTML;
+  preview.innerHTML = '<section><h3>🌅 오픈보고문</h3>' + openReportHtml() + '</section>'
+    + '<div class="divider"></div><section><h3>🌙 마감보고문</h3>' + closingHtml + '</section>';
+  preview.classList.remove('preview-hidden');
+  body.appendChild(preview);
+  const title = modal.querySelector('.report-modal-head h2');
+  if(title) title.textContent = '🧾 보고 보기';
+  modal.classList.add('show');
 }
 function showOpenReportPreview(){
   syncInquiryDerivedTotals();
@@ -4966,8 +4982,8 @@ let allowSaveBeforeInitialSnapshot = false;
   let healthFlip = 0;
   let scheduledNoticeTimer = null;
   const knownNoticeMascots = [
-    {keys:['와루','waru','awaru'], emoji:'🦖'},
-    {keys:['요셉','yosep','joseph'], emoji:'🐱'},
+    {keys:['와루','waru','awaru'], emoji:'🐮'},
+    {keys:['요셉','yosep','joseph'], emoji:'🐸'},
     {keys:['형규','영규','hyunggyu','younggyu'], emoji:'🐻'},
     {keys:['유진','yujin'], emoji:'🐰'}
   ];
@@ -5271,8 +5287,8 @@ let allowSaveBeforeInitialSnapshot = false;
 <script id="workingCrewMascotScript">
 (function(){
   const avatarMap = [
-    {keys:['와루','waru','awaru'], emoji:'🦖'},
-    {keys:['요셉','yosep','joseph'], emoji:'🐱'},
+    {keys:['와루','waru','awaru'], emoji:'🐮'},
+    {keys:['요셉','yosep','joseph'], emoji:'🐸'},
     {keys:['형규','영규','hyunggyu','younggyu'], emoji:'🐻'},
     {keys:['유진','yujin'], emoji:'🐰'}
   ];
