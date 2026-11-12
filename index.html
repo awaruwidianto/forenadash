@@ -3349,13 +3349,15 @@ function speakCheer(textToSay, options={}){
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(cleanText);
     const voices = window.speechSynthesis.getVoices().filter(v=>/^ko(?:[-_]|$)/i.test(v.lang));
-    // Keep a consistent Korean voice and a consistently high pitch for all announcements.
-    const highVoice = voices.find(v=>/female|여성|SunHi|Heami|Yuna|Sora|Seoyeon|JiYoung/i.test(v.name || ''))
-      || koreanVoice || findKoreanVoice() || voices[0] || null;
+    // Prefer the browser's natural-sounding Korean voices, rotating between them.
+    // Excessive pitch can sound robotic on some speech engines.
+    const naturalVoices = voices.filter(v=>/Natural|Neural|Premium|Google|Siri|Online/i.test(v.name || '') || v.localService === false);
+    const voicePool = naturalVoices.length ? naturalVoices : voices;
+    const turn = cheerVoiceIndex++;
     utter.lang = 'ko-KR';
-    if(highVoice) utter.voice = highVoice;
-    utter.rate = options.scream ? 1.1 : 1.04;
-    utter.pitch = options.scream ? 1.85 : 1.6;
+    utter.voice = voicePool.length ? voicePool[turn % voicePool.length] : (koreanVoice || findKoreanVoice());
+    utter.rate = options.scream ? 1.08 : [1.0, 1.06, 1.02][turn % 3];
+    utter.pitch = options.scream ? 1.38 : [1.2, 1.32, 1.26][turn % 3];
     utter.volume = Math.max(0, Math.min(1, volume));
     utter.onend=finish;
     utter.onerror=finish;
@@ -3398,7 +3400,7 @@ function celebrateSameDayIncrease(after, before){
 function celebrateCancelIncrease(){
   showCheer('😱 으아아아악!');
   toast('취소가 추가됐어요');
-  speakCheer('흐아아앙! 엉엉엉! 예약이 취소됐어요!', {scream:true});
+  speakCheer('흐아앙! 으아아아악!', {scream:true});
 }
 
 function celebrateChangeIncrease(){
