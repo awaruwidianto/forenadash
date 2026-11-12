@@ -3316,52 +3316,106 @@ function showCheer(message){
   setTimeout(()=>el.classList.remove('show'), 1300);
 }
 
-function findKoreanVoice(){
+// Korean voices are provided by the visitor's browser/OS. Prefer high-quality
+// voices, rotate speakers, and gently age the delivery over the Korean workday.
+function availableKoreanVoices(){
+  if(!('speechSynthesis' in window)) return [];
   try {
-    if(!('speechSynthesis' in window)) return null;
-    const voices = window.speechSynthesis.getVoices() || [];
-    const koreanVoices = voices.filter(v => /ko[-_]KR/i.test(v.lang || '') || /Korean|한국|ko/i.test((v.name || '') + ' ' + (v.lang || '')));
-    koreanVoice = koreanVoices.find(v => /Natural|Neural|Google|Microsoft|Siri|Premium/i.test(v.name || ''))
-      || koreanVoices.find(v => v.localService === false)
-      || koreanVoices[0]
-      || null;
-    return koreanVoice;
-  } catch(e) { return null; }
+    return (window.speechSynthesis.getVoices() || []).filter(v =>
+      /^ko(?:[-_]|$)/i.test(v.lang || '') ||
+      /korean|한국어|한국/i.test(v.name || '')
+    );
+  } catch(e) { return []; }
 }
-
+function voiceQualityScore(v){
+  const name = v.name || '';
+  let score = 0;
+  if(/natural|neural|premium|enhanced|online/i.test(name)) score += 8;
+  if(/microsoft|google|apple|siri/i.test(name)) score += 4;
+  if(v.localService === false) score += 2;
+  if(/espeak|compact|classic|robot/i.test(name)) score -= 12;
+  return score;
+}
+function findKoreanVoice(){
+  const voices = availableKoreanVoices().sort((a,b)=>voiceQualityScore(b)-voiceQualityScore(a));
+  koreanVoice = voices[0] || null;
+  return koreanVoice;
+}
 if('speechSynthesis' in window){
-  window.speechSynthesis.onvoiceschanged = findKoreanVoice;
+  // Do not overwrite other voiceschanged handlers on a future integration.
+  window.speechSynthesis.addEventListener('voiceschanged', findKoreanVoice);
   findKoreanVoice();
 }
-
 function speechTextOnly(value){
   return String(value || '').replace(/[#*0-9]\uFE0F?\u20E3|[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\u200D\uFE0E\uFE0F\u20E3\u{E0020}-\u{E007F}]/gu, '').replace(/\s+/g, ' ').trim();
 }
 let cheerVoiceIndex = 0;
+let activeCheerSpeech = null;
+function koreanWorkdayProgress(){
+  // Explicit Asia/Seoul clock, including when a teammate opens the page abroad.
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date());
+  const h = Number(parts.find(p=>p.type==='hour')?.value || 0);
+  const m = Number(parts.find(p=>p.type==='minute')?.value || 0);
+  // 09:00 = young, 18:30 = older; smoothly transition all day.
+  return Math.max(0, Math.min(1, (h*60+m-9*60)/(9.5*60)));
+}
+function pickTimeBasedKoreanVoice(turn, progress){
+  const voices = availableKoreanVoices().sort((a,b)=>voiceQualityScore(b)-voiceQualityScore(a));
+  if(!voices.length) return koreanVoice || findKoreanVoice();
+  const highQuality = voices.filter(v=>voiceQualityScore(v)>=4);
+  const pool = highQuality.length ? highQuality : voices;
+  // Alternating two voices (if installed) is more natural than manipulating
+  // one voice's pitch dramatically to imitate gender or age.
+  const speaker = turn % 2;
+  const olderHints = /hee|hyun|sook|suk|soon|sun|grand|elder|older/i;
+  const youthfulHints = /young|yuna|jiyeon|jiyoung|seoyeon|nari/i;
+  const ranked = [...pool].sort((a,b)=>{
+    const ageBias = (v) => (olderHints.test(v.name||'') ? progress*1.3 : 0)
+      + (youthfulHints.test(v.name||'') ? (1-progress)*1.3 : 0);
+    return (voiceQualityScore(b)+ageBias(b))-(voiceQualityScore(a)+ageBias(a));
+  });
+  return ranked[speaker % ranked.length];
+}
 function speakCheer(textToSay, options={}){
-  let finished=false;
+  let finished = false;
   let timer;
-  const finish=()=>{ if(finished) return; finished=true; clearTimeout(timer); options.onend?.(); };
+  const finish=()=>{
+    if(finished) return;
+    finished = true;
+    clearTimeout(timer);
+    if(activeCheerSpeech?.finish === finish) activeCheerSpeech = null;
+    options.onend?.();
+  };
   try {
     const volume = effectiveVolume();
     const cleanText = speechTextOnly(textToSay);
     if(volume <= 0 || !cleanText || !('speechSynthesis' in window)){ finish(); return; }
+    // Finalize the previous announcement before cancelling its utterance.
+    if(activeCheerSpeech) activeCheerSpeech.finish();
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(cleanText);
-    const voices = window.speechSynthesis.getVoices().filter(v=>/^ko(?:[-_]|$)/i.test(v.lang));
-    // Prefer the browser's natural-sounding Korean voices, rotating between them.
-    // Excessive pitch can sound robotic on some speech engines.
-    const naturalVoices = voices.filter(v=>/Natural|Neural|Premium|Google|Siri|Online/i.test(v.name || '') || v.localService === false);
-    const voicePool = naturalVoices.length ? naturalVoices : voices;
     const turn = cheerVoiceIndex++;
+    const age = koreanWorkdayProgress();
     utter.lang = 'ko-KR';
-    utter.voice = voicePool.length ? voicePool[turn % voicePool.length] : (koreanVoice || findKoreanVoice());
-    utter.rate = options.scream ? 1.08 : [1.0, 1.06, 1.02][turn % 3];
-    utter.pitch = options.scream ? 1.38 : [1.2, 1.32, 1.26][turn % 3];
+    utter.voice = pickTimeBasedKoreanVoice(turn, age);
+    // Moderate adjustments only: big pitch shifts sound mechanical.
+    // Morning is bright and lively; evening is slower, warmer and deeper.
+    const alternation = turn % 2 === 0 ? 0.012 : -0.012;
+    utter.rate = Math.max(.84, Math.min(1.08, 1.025 - .125*age + alternation));
+    utter.pitch = Math.max(.82, Math.min(1.07, 1.035 - .165*age + alternation));
+    if(options.scream){
+      // Keep cancellation sounds expressive but not chipmunk-like.
+      utter.rate = Math.min(1.09, utter.rate + .055);
+      utter.pitch = Math.min(1.09, utter.pitch + .045);
+    }
     utter.volume = Math.max(0, Math.min(1, volume));
-    utter.onend=finish;
-    utter.onerror=finish;
-    if(options.onend) timer=setTimeout(finish, 2600);
+    utter.onend = finish;
+    utter.onerror = finish;
+    activeCheerSpeech = {finish};
+    // Safety fallback so chained announcements never get stuck.
+    if(options.onend) timer = setTimeout(finish, Math.max(3200, cleanText.length*180));
     window.speechSynthesis.speak(utter);
   } catch(e) { finish(); }
 }
